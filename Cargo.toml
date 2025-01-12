@@ -1,0 +1,41 @@
+# Copyright 2025 Bloxide, all rights reserved
+
+[package]
+name = "bloxide"
+version = "0.0.1"
+edition = "2021"
+
+[features]
+# Make runtime selection required by having no default features
+default = ["runtime-tokio"]
+
+# Create a feature group for runtimes
+runtime-tokio = ["tokio", "tokio-stream", "tokio-util", "env_logger", "log/std"]
+runtime-embassy = ["embassy-sync", "embassy-executor"]
+
+[dependencies]
+# Logging - configured via runtime features
+log = { version = "0.4.22", default-features = false }
+
+# Optional dependencies for tokio runtime
+tokio = { version = "1.43.0", features = ["full"], optional = true }
+tokio-stream = { version = "0.1.17", features = ["full"], optional = true }
+tokio-util = { version = "0.7.13", features = ["full"], optional = true }
+env_logger = { version = "0.11.6", optional = true }
+
+# Optional dependencies for embassy runtime
+embassy-sync = { version = "0.6.1", optional = true }
+embassy-executor = { version = "0.6.3", optional = true }
+embassy-futures = "0.1.1"
+
+# Other optional dependencies
+futures = { version = "0.3.31", optional = true }
+rand = { version = "0.8.5", optional = true }
+
+[package.metadata.cargo-all-features]
+skip_feature_sets = [
+    # Skip testing no features at all
+    [],
+    # Skip testing all features together
+    ["runtime-tokio", "runtime-embassy"]
+]
