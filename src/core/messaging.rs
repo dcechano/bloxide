@@ -3,99 +3,90 @@
 use crate::core::actor::ActorSpawner;
 use crate::std_exports::*;
 
-// Base trait for all messages
-pub trait ActorMessage: Debug + Send + Clone + 'static {}
-
-// Blanket implementation
-impl<T> ActorMessage for T where T: Debug + Send + Clone + 'static {}
-
-pub trait ActorHandle<M: ActorMessage>: Send + Debug + 'static {
-    fn as_any(&self) -> &dyn Any;
-    fn box_clone(&self) -> Box<dyn ActorHandle<M>>;
-    fn send(&self, msg: M);
-}
-
-impl<M: ActorMessage> Clone for Box<dyn ActorHandle<M>> {
-    fn clone(&self) -> Self {
-        self.box_clone()
-    }
-}
-
-// Type Erasure allows us to send handles as trait objects between actors,
-// but use the concrete type for sending messages
-pub trait ErasedActorHandle: Send + Debug {
-    fn as_any(&self) -> &dyn Any;
-    fn box_clone(&self) -> Box<dyn ErasedActorHandle>;
-}
-
-impl Clone for Box<dyn ErasedActorHandle> {
-    fn clone(&self) -> Self {
-        self.box_clone()
-    }
-}
-
-// Wrapper type for type erasure
+/// Basic message type that wraps any payload and has an id. Usually used as a "source id"
 #[derive(Debug)]
-struct ErasedHandleWrapper<M: ActorMessage>(Box<dyn ActorHandle<M>>);
+pub struct Message<T> {
+    pub id: u16,
+    pub payload: T,
+}
 
-impl<M: ActorMessage> ErasedActorHandle for ErasedHandleWrapper<M> {
-    fn as_any(&self) -> &dyn Any {
-        self.0.as_any()
+impl<T> Message<T> {
+    pub fn new(id: u16, payload: T) -> Self {
+        Self { id, payload }
     }
 
-    fn box_clone(&self) -> Box<dyn ErasedActorHandle> {
-        Box::new(ErasedHandleWrapper(self.0.clone()))
+    pub fn id(&self) -> u16 {
+        self.id
     }
 }
 
-pub fn erase_handle<M: ActorMessage>(
-    handle: Box<dyn ActorHandle<M>>,
-) -> Box<dyn ErasedActorHandle> {
-    Box::new(ErasedHandleWrapper(handle))
-}
-
+/// Handle type that corresponds to a specific message type
 #[derive(Debug)]
-pub struct OwnedSpawner(Box<dyn ActorSpawner>);
+pub struct Handle<M, S> {
+    pub id: u16,
+    pub sender: S,
+    pub _phantom: PhantomData<M>,
+}
 
-impl OwnedSpawner {
-    pub fn new(spawner: Box<dyn ActorSpawner>) -> Self {
-        Self(spawner)
+impl<M, S> Handle<M, S> {
+    pub fn new(id: u16, sender: S) -> Self {
+        Self {
+            id,
+            sender,
+            _phantom: PhantomData,
+        }
     }
 
-    pub fn as_spawner(&self) -> &dyn ActorSpawner {
-        self.0.as_ref()
+    pub fn id(&self) -> u16 {
+        self.id
     }
 }
 
-// Update StandardMessage to use OwnedSpawner
-#[derive(Debug)]
-pub enum StandardMessage {
-    Initialize,
-    Shutdown,
-    RegisterSender(Box<dyn ErasedActorHandle>),
-    SpawnRequest(OwnedSpawner),
-    Error(String),
-}
-
-// We can still derive Clone for StandardMessage since OwnedSpawner is only moved
-impl Clone for StandardMessage {
+/// Add manual Clone implementation that only requires S: Clone
+/// This allows `Message<T>`to be passed by value if necessary
+impl<M, S: Clone + Send> Clone for Handle<M, S> {
     fn clone(&self) -> Self {
-        match self {
-            Self::Initialize => Self::Initialize,
-            Self::Shutdown => Self::Shutdown,
-            Self::RegisterSender(handle) => Self::RegisterSender(handle.clone()),
-            Self::Error(err) => Self::Error(err.clone()),
-            Self::SpawnRequest(_) => panic!("SpawnRequest cannot be cloned"),
+        Self {
+            id: self.id,
+            sender: self.sender.clone(),
+            _phantom: PhantomData,
         }
     }
 }
 
-pub trait MessageSet: Debug + Send + 'static {
-    fn from_standard(msg: StandardMessage) -> Self;
+/// Implement type erasure to send any Handle over channels
+impl<M: Send + 'static, S: Clone + Send + 'static> Handle<M, S> {
+    pub fn into_erased(self) -> Box<dyn Any + Send> {
+        Box::new(self)
+    }
 }
 
-impl MessageSet for StandardMessage {
-    fn from_standard(msg: StandardMessage) -> Self {
-        msg
+/// Trait for handles to send messages
+pub trait MessageSender {
+    type PayloadType;
+    fn try_send(
+        &self,
+        msg: Message<Self::PayloadType>,
+    ) -> Result<(), TrySendError<Message<Self::PayloadType>>>;
+}
+
+/// Enum for standard payloads
+pub enum StandardPayload {
+    Initialize,
+    Shutdown,
+    RegisterSender(Box<dyn Any + Send>),
+    SpawnRequest(Box<dyn ActorSpawner>),
+    Error(String),
+}
+
+impl Debug for StandardPayload {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        match self {
+            StandardPayload::Initialize => write!(f, "Initialize"),
+            StandardPayload::Shutdown => write!(f, "Shutdown"),
+            StandardPayload::RegisterSender(_) => write!(f, "RegisterSender(...)"),
+            StandardPayload::SpawnRequest(_) => write!(f, "SpawnRequest(...)"),
+            StandardPayload::Error(msg) => write!(f, "Error({})", msg),
+        }
     }
 }

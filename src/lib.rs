@@ -15,9 +15,12 @@ pub mod std_exports {
     pub use std::any::Any;
     pub use std::boxed::Box;
     pub use std::fmt::Debug;
+    pub use std::fmt::Formatter;
+    pub use std::marker::PhantomData;
     pub use std::string::String;
     pub use std::sync::Arc;
     pub use std::vec::Vec;
+    pub use tokio::sync::mpsc::error::TrySendError;
 }
 
 #[cfg(feature = "runtime-embassy")]
@@ -28,6 +31,9 @@ pub mod std_exports {
     pub use alloc::vec::Vec;
     pub use core::any::Any;
     pub use core::fmt::Debug;
+    pub use core::fmt::Formatter;
+    pub use core::marker::PhantomData;
+    pub use embassy_sync::channel::TrySendError;
 }
 
 // Re-export everything from std_exports at crate root

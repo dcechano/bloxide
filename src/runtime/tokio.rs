@@ -10,44 +10,27 @@ pub mod runtime {
 
     pub const STANDARD_MESSAGE_CHANNEL_SIZE: usize = DEFAULT_CHANNEL_SIZE;
 
-    #[derive(Debug, Clone)]
-    pub struct TokioHandle<M: ActorMessage, const Q: usize> {
-        sender: mpsc::Sender<M>,
-    }
+    pub type TokioHandle<M> = Handle<M, mpsc::Sender<Message<M>>>;
 
-    impl<M: ActorMessage, const Q: usize> TokioHandle<M, Q> {
-        pub fn new(sender: mpsc::Sender<M>) -> Self {
-            Self { sender }
+    impl<M> MessageSender for TokioHandle<M> {
+        type PayloadType = M;
+
+        fn try_send(&self, msg: Message<M>) -> Result<(), TrySendError<Message<M>>> {
+            self.sender.try_send(msg)
         }
     }
 
-    impl<M: ActorMessage, const Q: usize> ActorHandle<M> for TokioHandle<M, Q> {
-        fn as_any(&self) -> &dyn Any {
-            self
-        }
-
-        fn box_clone(&self) -> Box<dyn ActorHandle<M>> {
-            Box::new(TokioHandle::<M, Q> {
-                sender: self.sender.clone(),
-            })
-        }
-
-        fn send(&self, msg: M) {
-            let _ = self.sender.try_send(msg);
-        }
-    }
-
-    pub type StandardMessageHandle = TokioHandle<StandardMessage, STANDARD_MESSAGE_CHANNEL_SIZE>;
+    pub type StandardMessageHandle = TokioHandle<StandardPayload>;
 
     #[derive(Debug)]
     pub struct TokioActorSpawner<const Q: usize, A: Actor> {
-        phantom: std::marker::PhantomData<A>,
+        phantom: PhantomData<A>,
     }
 
     impl<const Q: usize, A: Actor> Default for TokioActorSpawner<Q, A> {
         fn default() -> Self {
             Self {
-                phantom: std::marker::PhantomData,
+                phantom: PhantomData,
             }
         }
     }
@@ -61,22 +44,21 @@ pub mod runtime {
     impl<const Q: usize, A> ActorSpawner for TokioActorSpawner<Q, A>
     where
         A: Actor + Debug + 'static,
+        A::MessageSet: From<Message<StandardPayload>>,
     {
-        fn as_any(&self) -> &dyn Any {
-            self
-        }
-
         fn spawn(&self, id: u16) -> Result<StandardMessageHandle, ActorError> {
-            let (tx, mut rx) = mpsc::channel::<StandardMessage>(STANDARD_MESSAGE_CHANNEL_SIZE);
-            let mut actor = A::new(id, StandardMessageHandle::new(tx.clone()));
+            let (tx, mut rx) =
+                mpsc::channel::<Message<StandardPayload>>(STANDARD_MESSAGE_CHANNEL_SIZE);
+            let handle = StandardMessageHandle::new(id, tx);
+            let mut actor = A::new(id, handle.clone());
 
             tokio::spawn(async move {
                 while let Some(msg) = rx.recv().await {
-                    actor.handle_message(&A::MessageSet::from_standard(msg));
+                    actor.handle_message(&msg.into());
                 }
             });
 
-            Ok(StandardMessageHandle::new(tx))
+            Ok(handle)
         }
     }
 }
