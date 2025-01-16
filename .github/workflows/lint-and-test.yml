@@ -1,0 +1,115 @@
+# Copyright 2025 Bloxide, all rights reserved
+name: Lint and Test Rust Backend
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    paths:
+      - ".github/**"
+      - "src/**"
+      - "Cargo.*"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.ref }}-${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint (Check with both default and embassy features)
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        feature-set: [ "default", "embassy" ]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install stable toolchain
+        run: |
+          rustup show
+          rustup component add rustfmt clippy
+
+      # Decide which Cargo flags to use based on matrix.feature-set
+      - name: Cargo Build
+        run: |
+          if [ "${{ matrix.feature-set }}" = "default" ]; then
+            echo "Building with default features..."
+            cargo build
+          else
+            echo "Building with no default features + embassy..."
+            cargo build --no-default-features --features runtime-embassy
+          fi
+
+      - name: Cargo Format
+        run: |
+          cargo fmt -- --check
+
+      - name: Cargo Clippy
+        run: |
+          if [ "${{ matrix.feature-set }}" = "default" ]; then
+            cargo clippy --all-targets -- -W warnings -D warnings
+          else
+            cargo clippy --all-targets --no-default-features --features runtime-embassy -- -W warnings -D warnings
+          fi
+
+  test:
+    name: Test (Run coverage with both default and embassy features)
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        feature-set: [ "default", "embassy" ]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install dependencies
+        run: |
+          cargo install cargo-tarpaulin
+
+      - name: Show toolchain information
+        run: |
+          rustup toolchain list
+          cargo --version
+
+      - name: Run tests and report code coverage
+        run: |
+          if [ "${{ matrix.feature-set }}" = "default" ]; then
+            echo "Testing with default features..."
+            # If all tests pass in default mode:
+            RUSTC_BOOTSTRAP=1 cargo tarpaulin -o xml -o lcov -o html --doc --tests
+          else
+            echo "Testing with no default features + embassy..."
+            # For no_std or embedded, tarpaulin might be limited.
+            # RUSTC_BOOTSTRAP=1 cargo tarpaulin --no-default-features --features runtime-embassy -o xml -o lcov -o html --doc --tests
+          fi
+
+      - name: Upload coverage report (xml)
+        uses: actions/upload-artifact@v4
+        with:
+          name: Test Coverage Results (xml)
+          path: cobertura.xml
+
+      - name: Upload coverage report (lcov)
+        uses: actions/upload-artifact@v4
+        with:
+          name: Test Coverage Results (lcov)
+          path: lcov.info
+
+      - name: Upload coverage report (html)
+        uses: actions/upload-artifact@v4
+        with:
+          name: Test Coverage Results (html)
+          path: tarpaulin-report.html
+
+  build-docs:
+    name: Build documentation
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create Documentation for bloxide
+        working-directory: ${{github.workspace}}
+        run: RUSTDOCFLAGS=-Dwarnings cargo doc -p bloxide --no-deps

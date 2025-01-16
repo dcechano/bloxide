@@ -4,9 +4,6 @@ use crate::core::messaging::*;
 use crate::runtime::*;
 use crate::std_exports::*;
 
-#[cfg(feature = "runtime-embassy")]
-pub type StandardMessageChannelMutex = DefaultChannelMutex;
-
 pub trait Actor: Send + 'static {
     type ActorData: ActorData;
     type StateEnum: State<ActorData = Self::ActorData>;

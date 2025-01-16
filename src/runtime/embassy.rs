@@ -9,8 +9,11 @@ pub mod runtime {
     use embassy_sync::channel::Channel;
     use log::{error, info};
 
-    pub const STANDARD_MESSAGE_CHANNEL_SIZE: usize = 32;
     pub type DefaultChannelMutex = embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
+    pub const DEFAULT_CHANNEL_SIZE: usize = 8;
+
+    pub type StandardMessageChannelMutex = DefaultChannelMutex;
+    pub const STANDARD_MESSAGE_CHANNEL_SIZE: usize = DEFAULT_CHANNEL_SIZE;
     pub type StandardMessageMutex = DefaultChannelMutex;
     pub type StandardMessageHandle =
         EmbassyHandle<StandardMessageMutex, StandardMessage, STANDARD_MESSAGE_CHANNEL_SIZE>;

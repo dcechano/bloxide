@@ -5,8 +5,10 @@ pub mod runtime {
     use crate::core::{actor::*, messaging::*};
     use crate::std_exports::*;
     use tokio::sync::mpsc;
-    pub const DEFAULT_TOKIO_CHANNEL_SIZE: usize = 32;
-    pub const STANDARD_MESSAGE_CHANNEL_SIZE: usize = DEFAULT_TOKIO_CHANNEL_SIZE;
+
+    pub const DEFAULT_CHANNEL_SIZE: usize = 32;
+
+    pub const STANDARD_MESSAGE_CHANNEL_SIZE: usize = DEFAULT_CHANNEL_SIZE;
 
     #[derive(Debug, Clone)]
     pub struct TokioHandle<M: ActorMessage, const Q: usize> {
