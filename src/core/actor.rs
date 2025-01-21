@@ -1,13 +1,12 @@
 // Copyright 2025 Bloxide, all rights reserved
 
-use crate::core::messaging::*;
 use crate::runtime::*;
 use crate::std_exports::*;
 
 pub trait Actor: Send + 'static {
     type ActorData: ActorData;
     type StateEnum: State<ActorData = Self::ActorData>;
-    type MessageSet: MessageSet;
+    type MessageSet;
     type ActorError;
 
     fn new(id: u16, handle: StandardMessageHandle) -> Self;
@@ -105,5 +104,4 @@ pub trait State: Send + Sized + PartialEq + 'static {
 
 pub trait ActorSpawner: core::fmt::Debug + Send + 'static {
     fn spawn(&self, id: u16) -> Result<StandardMessageHandle, ActorError>;
-    fn as_any(&self) -> &dyn core::any::Any;
 }
