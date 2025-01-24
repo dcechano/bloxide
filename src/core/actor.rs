@@ -42,7 +42,7 @@ pub trait RunnableLocal<A: Components> {
             }) as Pin<Box<dyn Future<Output = ()> + 'static>>
         };
 
-        StandardPayload::Error(Box::new("Not implemented".to_string()))
+        StandardPayload::Error(Box::new("Not implemented".into()))
         //StandardPayload::SpawnLocalRequest(Box::new(closure))
         //TODO: Seperate Spawn and SpawnLocal into different Message Payload types due to Send restrictions
     }
