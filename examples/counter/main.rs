@@ -8,7 +8,7 @@ use log::*;
 
 #[::tokio::main]
 async fn main() {
-    let _ = env_logger::builder().init();
+    env_logger::builder().init();
     let (standard_sender, standard_receiver) =
         mpsc::channel::<Message<StandardPayload>>(DEFAULT_CHANNEL_SIZE);
     let (counter_sender, counter_receiver) =
