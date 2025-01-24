@@ -1,3 +1,5 @@
+// Copyright 2025 Bloxide, all rights reserved
+
 use crate::core::messaging::*;
 use crate::runtime::*;
 use crate::std_exports::*;
@@ -24,6 +26,25 @@ pub trait Runnable<A: Components> {
         };
 
         StandardPayload::SpawnRequest(Box::new(closure))
+    }
+}
+
+pub trait RunnableLocal<A: Components> {
+    fn run_actor(self: Box<Self>) -> Pin<Box<dyn Future<Output = ()> + 'static>>;
+    fn into_request(self: Box<Self>) -> StandardPayload
+    where
+        Self: Send + 'static,
+    {
+        let _closure = move || {
+            Box::pin(async move {
+                // We’re inside the closure, so we can now await run_actor():
+                self.run_actor().await
+            }) as Pin<Box<dyn Future<Output = ()> + 'static>>
+        };
+
+        StandardPayload::Error(Box::new("Not implemented".to_string()))
+        //StandardPayload::SpawnLocalRequest(Box::new(closure))
+        //TODO: Seperate Spawn and SpawnLocal into different Message Payload types due to Send restrictions
     }
 }
 pub trait StateEnum: Default + Debug {

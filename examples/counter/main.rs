@@ -1,3 +1,5 @@
+// Copyright 2025 Bloxide, all rights reserved
+
 mod actors;
 
 use crate::actors::counter::*;

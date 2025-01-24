@@ -1,3 +1,5 @@
+// Copyright 2025 Bloxide, all rights reserved
+
 use bloxide::core::actor::*;
 use bloxide::core::messaging::*;
 use bloxide::runtime::*;

@@ -1,3 +1,5 @@
+// Copyright 2025 Bloxide, all rights reserved
+
 use crate::std_exports::*;
 
 /// Basic message type that wraps any payload and has an id. Usually used as a "source id"
