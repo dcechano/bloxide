@@ -77,6 +77,7 @@ pub enum StandardPayload {
     SpawnRequest(
         Box<dyn FnOnce() -> Pin<Box<dyn Future<Output = ()> + Send + 'static>> + Send + 'static>,
     ),
+    //TODO: Make seperate Send and !Send Payload versions
     //SpawnLocalRequest(Box<dyn FnOnce() -> Pin<Box<dyn Future<Output = ()> + 'static>>>),
     Error(Box<String>),
 }

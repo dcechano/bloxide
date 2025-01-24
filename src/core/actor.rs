@@ -4,14 +4,14 @@ use crate::core::messaging::*;
 use crate::runtime::*;
 use crate::std_exports::*;
 
-// Define a trait to encapsulate the common types
+// A trait to encapsulate types needed for an actor
 pub trait Components {
     type StateEnum: StateEnum;
     type MessageSet: MessageSet;
     type ExtendedState: ExtendedState;
     type ActorConfig;
 }
-//Implement one or the other
+//Implement Runnable or RunnableLocal depending on if the actor implements Send
 pub trait Runnable<A: Components> {
     fn run_actor(self: Box<Self>) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>;
     fn into_request(self: Box<Self>) -> StandardPayload
@@ -52,18 +52,24 @@ pub trait StateEnum: Default + Debug {
         Self::default()
     }
 }
-pub trait MessageSet {}
+pub trait MessageSet {} //Marker trait
 
 pub trait ExtendedState {
     fn new() -> Self;
 }
 
+//Used as Option<Transition<T>>, None = No transition
+//Errors handled as transitions to a Error state
 pub enum Transition<T> {
     To(T),
     Parent,
 }
 
+
+//The main actor struct.  Actors are differentiated by their components
+//Anything that all Actors should have is stored here
 pub struct Actor<S: Components> {
+    //Handle has the Actor's ID, no need to duplicate it with a seperate ID field
     pub handle: StandardMessageHandle,
     pub state_machine: StateMachine<S>,
     pub config: S::ActorConfig,
@@ -76,6 +82,7 @@ where
 {
     pub fn new(
         handle: StandardMessageHandle,
+        //Initialized ExtendedState passed in here
         extended_state: S::ExtendedState,
         config: S::ActorConfig,
     ) -> Self {
@@ -89,6 +96,7 @@ where
 
 pub struct StateMachine<S: Components> {
     pub current_state: S::StateEnum,
+    //ExtendedState stored here to be passed to each state
     extended_state: S::ExtendedState,
 }
 
@@ -104,6 +112,7 @@ where
         }
     }
 
+    //This is how messages get handled.  Structured so it can be called recursively for Parent transitions
     pub fn dispatch(&mut self, message: &S::MessageSet, state: &S::StateEnum)
     where
         S::StateEnum: State<S>,
@@ -122,6 +131,7 @@ where
         }
     }
 
+    //helper function 
     fn build_state_path(&self, start_state: S::StateEnum) -> Vec<S::StateEnum> {
         let mut path = Vec::new();
         let mut current = Some(start_state);
@@ -136,6 +146,7 @@ where
         path
     }
 
+    //helper function
     fn find_lca_index(&self, current_path: &[S::StateEnum], dest_path: &[S::StateEnum]) -> usize {
         let mut lca_index = 0;
         while lca_index < current_path.len().min(dest_path.len())
@@ -146,6 +157,8 @@ where
         lca_index
     }
 
+    //This is how states get changed
+    //Traverses the correct on_exit and on_entry functions
     fn change_state(&mut self, new_state: S::StateEnum) {
         // Build current state path
         let current_path = self.build_state_path(self.current_state.clone());
@@ -159,6 +172,7 @@ where
         // Clone the paths to avoid borrowing issues
 
         // Exit from current state up to (but not including) LCA
+        // TODO: Bug - Because of this, UNINIT has to call its on_exit manually on Actor initialization
         for state in current_path[lca_index..].iter().rev() {
             state.on_exit(&mut self.extended_state);
         }
@@ -173,10 +187,12 @@ where
     }
 }
 
-// Use the unified trait in the State trait
+
 pub trait State<C: Components> {
+    //Default on_entry and on_exit functions do nothing, only need to be overridden if needed
     fn on_entry(&self, _data: &mut C::ExtendedState) {}
     fn on_exit(&self, _data: &mut C::ExtendedState) {}
+    //All states must have a parent set
     fn parent(&self) -> C::StateEnum {
         panic!("No parent for this state");
     }

@@ -259,8 +259,6 @@ impl State<CounterComponents> for Counting {
     ) -> Option<Transition<CounterStateEnum>> {
         trace!("[Counting] handle_message: {:?}", message);
 
-        // Example logic: only respond to increment/decrement,
-        // everything else transitions back to Idle.
         match message {
             CounterMessageSet::CounterMessage(msg) => match &msg.payload {
                 CounterPayload::Increment(amount) => {
@@ -293,7 +291,6 @@ impl State<CounterComponents> for Counting {
 
                 _ => None,
             },
-            // If it's not a CounterMessage, ignore or go back to Idle
             _ => None,
         }
     }
@@ -313,7 +310,6 @@ impl State<CounterComponents> for Finished {
         match message {
             CounterMessageSet::CounterMessage(msg) => match &msg.payload {
                 CounterPayload::CountEvent(event) => match **event {
-                    // If we want to allow reset from Finished:
                     CountEvent::Reset => {
                         data.count = 0;
                         Some(Transition::To(CounterStateEnum::NotStarted(NotStarted {})))
@@ -349,7 +345,6 @@ impl State<CounterComponents> for Error {
         trace!("[Error] handle_message: {:?}", message);
         match message {
             CounterMessageSet::CounterMessage(msg) => match &msg.payload {
-                // Example: from Error, a CountEvent::Reset might fix the error
                 CounterPayload::CountEvent(event) => match **event {
                     CountEvent::Reset => {
                         data.count = 0;
@@ -368,7 +363,8 @@ impl State<CounterComponents> for Error {
     }
 }
 
-//Boilerplate
+
+//TODO: Generate this from a macro
 
 impl State<CounterComponents> for CounterStateEnum {
     fn on_entry(&self, data: &mut CounterExtendedState) {
