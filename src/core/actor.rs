@@ -65,7 +65,6 @@ pub enum Transition<T> {
     Parent,
 }
 
-
 //The main actor struct.  Actors are differentiated by their components
 //Anything that all Actors should have is stored here
 pub struct Actor<S: Components> {
@@ -131,7 +130,7 @@ where
         }
     }
 
-    //helper function 
+    //helper function
     fn build_state_path(&self, start_state: S::StateEnum) -> Vec<S::StateEnum> {
         let mut path = Vec::new();
         let mut current = Some(start_state);
@@ -186,7 +185,6 @@ where
         self.current_state = new_state;
     }
 }
-
 
 pub trait State<C: Components> {
     //Default on_entry and on_exit functions do nothing, only need to be overridden if needed

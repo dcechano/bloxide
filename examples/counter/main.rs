@@ -17,7 +17,7 @@ async fn main() {
     let (standard_sender, standard_receiver) =
         mpsc::channel::<Message<StandardPayload>>(DEFAULT_CHANNEL_SIZE);
     let (counter_sender, counter_receiver) =
-        mpsc::channel::<Message<CounterPayload>>(DEFAULT_CHANNEL_SIZE);    
+        mpsc::channel::<Message<CounterPayload>>(DEFAULT_CHANNEL_SIZE);
     let handle = StandardMessageHandle::new(1, standard_sender);
     let counter_handle = CounterHandle::new(2, counter_sender);
 
@@ -50,7 +50,7 @@ async fn main() {
         CounterPayload::CountEvent(Box::new(CountEvent::StartCounting)),
     ));
     let _ = counter_handle.try_send(Message::new(0, CounterPayload::Increment(Box::new(3))));
- 
+
     let _ = counter_handle.try_send(Message::new(
         0,
         CounterPayload::CountEvent(Box::new(CountEvent::GetCount)),

@@ -363,7 +363,6 @@ impl State<CounterComponents> for Error {
     }
 }
 
-
 //TODO: Generate this from a macro
 
 impl State<CounterComponents> for CounterStateEnum {
