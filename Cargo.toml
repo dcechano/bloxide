@@ -31,6 +31,7 @@ embassy-futures = "0.1.1"
 # Other optional dependencies
 futures = { version = "0.3.31", optional = true }
 rand = { version = "0.8.5", optional = true }
+hashbrown = "0.15.2"
 
 [package.metadata.cargo-all-features]
 skip_feature_sets = [

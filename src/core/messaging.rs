@@ -5,56 +5,67 @@ use crate::std_exports::*;
 /// Basic message type that wraps any payload and has an id. Usually used as a "source id"
 #[derive(Debug)]
 pub struct Message<P> {
-    pub id: u16,
+    pub source_id: u16,
     pub payload: P,
 }
 
 impl<P> Message<P> {
-    pub fn new(id: u16, payload: P) -> Self {
-        Self { id, payload }
+    pub fn new(source_id: u16, payload: P) -> Self {
+        Self { source_id, payload }
     }
 
-    pub fn id(&self) -> u16 {
-        self.id
+    pub fn source_id(&self) -> u16 {
+        self.source_id
     }
 }
 
 /// Handle type that corresponds to a specific message type
 #[derive(Debug)]
-pub struct Handle<P, S> {
-    pub id: u16,
+pub struct Handle<S> {
+    pub dest_id: u16,
     pub sender: S,
-    pub _phantom: PhantomData<P>,
 }
 
-impl<P, S> Handle<P, S> {
-    pub fn new(id: u16, sender: S) -> Self {
+impl<S> PartialEq for Handle<S> {
+    fn eq(&self, other: &Self) -> bool {
+        self.dest_id == other.dest_id
+    }
+}
+
+impl<S> Eq for Handle<S> {}
+
+impl<S> Hash for Handle<S> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.dest_id.hash(state);
+    }
+}
+
+impl<S> Handle<S> {
+    pub fn new(dest_id: u16, sender: S) -> Self {
         Self {
-            id,
+            dest_id,
             sender,
-            _phantom: PhantomData,
         }
     }
 
-    pub fn id(&self) -> u16 {
-        self.id
+    pub fn dest_id(&self) -> u16 {
+        self.dest_id
     }
 }
 
 /// Add manual Clone implementation that only requires S: Clone
 /// This allows `Message<T>`to be passed by value if necessary
-impl<P, S: Clone> Clone for Handle<P, S> {
+impl<S: Clone> Clone for Handle<S> {
     fn clone(&self) -> Self {
         Self {
-            id: self.id,
+            dest_id: self.dest_id,
             sender: self.sender.clone(),
-            _phantom: PhantomData,
         }
     }
 }
 
 /// Implement type erasure to send any Handle over channels
-impl<P: 'static, S: Clone + 'static> Handle<P, S> {
+impl<S: Clone + 'static> Handle<S> {
     pub fn into_erased(self) -> Box<dyn Any> {
         Box::new(self)
     }
@@ -70,27 +81,47 @@ pub trait MessageSender {
 }
 
 /// Enum for standard payloads
+#[derive(Debug)]
 pub enum StandardPayload {
     Initialize,
     Shutdown,
-    RegisterSender(Box<dyn Any + Send>),
-    SpawnRequest(
-        Box<dyn FnOnce() -> Pin<Box<dyn Future<Output = ()> + Send + 'static>> + Send + 'static>,
-    ),
-    //TODO: Make seperate Send and !Send Payload versions
-    //SpawnLocalRequest(Box<dyn FnOnce() -> Pin<Box<dyn Future<Output = ()> + 'static>>>),
+    PollHandle,
+    Handle(Box<dyn Any + Send>),
+    PollState,
+    State(Box<dyn Any + Send>),
     Error(Box<String>),
 }
 
-impl Debug for StandardPayload {
-    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+
+
+pub enum SupervisorPayload {
+    Spawn(Box<dyn FnOnce() -> Pin<Box<dyn Future<Output = ()> + Send + 'static>> + Send + 'static>),
+    Error(Box<String>),
+}
+
+impl fmt::Debug for SupervisorPayload {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            StandardPayload::Initialize => write!(f, "Initialize"),
-            StandardPayload::Shutdown => write!(f, "Shutdown"),
-            StandardPayload::RegisterSender(_) => write!(f, "RegisterSender(...)"),
-            StandardPayload::SpawnRequest(_) => write!(f, "SpawnRequest(...)"),
-            //StandardPayload::SpawnLocalRequest(_) => write!(f, "SpawnLocalRequest(...)"),
-            StandardPayload::Error(msg) => write!(f, "Error({})", msg),
+            SupervisorPayload::Spawn(_) => write!(f, "Spawn"),
+            SupervisorPayload::Error(e) => write!(f, "Error: {}", e),
         }
     }
 }
+
+
+
+pub enum SupervisorLocalPayload {
+    SpawnLocal(Box<dyn FnOnce() -> Pin<Box<dyn Future<Output = ()> + 'static>> + 'static>),
+    Error(Box<String>),
+}
+
+impl fmt::Debug for SupervisorLocalPayload {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            SupervisorLocalPayload::SpawnLocal(_) => write!(f, "SpawnLocal"),
+            SupervisorLocalPayload::Error(e) => write!(f, "Error: {}", e),
+        }
+    }
+}
+
+

@@ -6,41 +6,77 @@ use crate::actors::counter::*;
 use bloxide::core::actor::*;
 use bloxide::core::messaging::*;
 use bloxide::runtime::*;
+use bloxide::supervisor::*;
 use log::*;
+use std::future::Future;
+use std::pin::Pin;
 
-#[::tokio::main]
+#[::tokio::main(flavor = "current_thread")]
 async fn main() {
     env_logger::builder().init();
 
-    // Make a handles
+    //ROOT ACTOR SETUP////////////////////////////////////////
+    // Make handles
     //TODO: Integrate these steps into one new() function
-    let (standard_sender, standard_receiver) =
+    let (counter_standard_sender, counter_standard_receiver) =
         mpsc::channel::<Message<StandardPayload>>(DEFAULT_CHANNEL_SIZE);
-    let (counter_sender, counter_receiver) =
+    let (counter_counter_sender, counter_receiver) =
         mpsc::channel::<Message<CounterPayload>>(DEFAULT_CHANNEL_SIZE);
-    let handle = StandardMessageHandle::new(1, standard_sender);
-    let counter_handle = CounterHandle::new(2, counter_sender);
+    let counter_standard_handle = StandardMessageHandle::new(1, counter_standard_sender);
+    let counter_handle = CounterHandle::new(1, counter_counter_sender);
 
     // Create actor config
-    let config = CounterActorConfig {
-        standard_receiver,
-        counter_receiver,
+    let counter_config = CounterActorConfig {
+        standard_receiver: counter_standard_receiver,
+        counter_receiver: counter_receiver,
         counter_handle: counter_handle.clone(),
     };
 
     // Create the actor
-    let actor =
-        Actor::<CounterComponents>::new(handle.clone(), CounterExtendedState::new(), config);
+    let counter_actor = Actor::<CounterComponents>::new(
+        counter_standard_handle.clone(),
+        CounterExtendedState::new(),
+        counter_config,
+    );
 
-    // Spawn the actor's run loop
-    if let StandardPayload::SpawnRequest(spawn_fn) = Box::new(actor).into_request() {
-        spawn(spawn_fn());
-        let _ = handle.try_send(Message::new(999, StandardPayload::Initialize));
-        sleep(Duration::from_millis(50)).await; //TODO: Bug - this delay needed to make sure the actor handles Init before other messages
-    }
+    // SUPERVISOR SETUP
+    let (supervisor_standard_sender, supervisor_standard_receiver) =
+        mpsc::channel::<Message<StandardPayload>>(DEFAULT_CHANNEL_SIZE);
+    let supervisor_standard_handle = StandardMessageHandle::new(0, supervisor_standard_sender);
+    let (supervisor_supervisor_sender, supervisor_supervisor_receiver) =
+        mpsc::channel::<Message<SupervisorPayload>>(DEFAULT_CHANNEL_SIZE);
+    let supervisor_supervisor_handle = SupervisorHandle::new(0, supervisor_supervisor_sender);
 
-    // Send some counter messages:
+    let supervisor_config = SupervisorConfig {
+        standard_receiver: supervisor_standard_receiver,
+        supervisor_receiver: supervisor_supervisor_receiver,
+    };
 
+    let root_spawn_fn = Box::new(|| -> Pin<Box<dyn Future<Output = ()> + Send>> {
+        Box::pin(async move {
+            // Move the actor in so it’s owned:
+            Box::new(counter_actor).run_actor().await;
+        })
+    });
+
+    let supervisor_extended_state =
+        SupervisorExtendedState::special_new(counter_standard_handle, root_spawn_fn, supervisor_supervisor_handle);
+    let supervisor_actor = Actor::<SupervisorComponents>::new(
+        supervisor_standard_handle.clone(),
+        supervisor_extended_state,
+        supervisor_config,
+    );
+
+
+    tokio::spawn(async move {
+        let _ = Box::new(supervisor_actor).run_actor().await;
+    });
+
+    let _ = supervisor_standard_handle.try_send(Message::new(0, StandardPayload::Initialize));
+
+    sleep(Duration::from_millis(100)).await;
+
+    // Send some counter messages
     let _ = counter_handle.try_send(Message::new(0, CounterPayload::SetMax(Box::new(5))));
 
     let _ = counter_handle.try_send(Message::new(0, CounterPayload::SetMin(Box::new(0))));

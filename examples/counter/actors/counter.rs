@@ -14,7 +14,7 @@ pub struct CounterActorConfig {
     pub counter_handle: CounterHandle,
 }
 
-pub struct CounterComponents {}
+pub struct CounterComponents;
 
 impl Components for CounterComponents {
     type StateEnum = CounterStateEnum;
@@ -32,28 +32,6 @@ pub enum CounterMessageSet {
 }
 impl MessageSet for CounterMessageSet {}
 
-mod state {
-    #[derive(Clone, PartialEq, Debug)]
-    pub struct Uninit {}
-
-    #[derive(Clone, PartialEq, Debug)]
-    pub struct Idle {}
-
-    #[derive(Clone, PartialEq, Debug)]
-    pub struct NotStarted {}
-
-    #[derive(Clone, PartialEq, Debug)]
-    pub struct Counting {}
-
-    #[derive(Clone, PartialEq, Debug)]
-    pub struct Finished {}
-
-    #[derive(Clone, PartialEq, Debug)]
-    pub struct Error {}
-}
-
-use state::*; // Import the state structs for internal use
-
 #[derive(Clone, PartialEq, Debug)]
 pub enum CounterStateEnum {
     Uninit(Uninit),
@@ -65,9 +43,32 @@ pub enum CounterStateEnum {
 }
 impl Default for CounterStateEnum {
     fn default() -> Self {
-        CounterStateEnum::Uninit(Uninit {})
+        CounterStateEnum::Uninit(Uninit)
     }
 }
+mod state {
+    #[derive(Clone, PartialEq, Debug)]
+    pub struct Uninit;
+
+    #[derive(Clone, PartialEq, Debug)]
+    pub struct Idle;
+
+    #[derive(Clone, PartialEq, Debug)]
+    pub struct NotStarted;
+
+    #[derive(Clone, PartialEq, Debug)]
+    pub struct Counting;
+
+    #[derive(Clone, PartialEq, Debug)]
+    pub struct Finished;
+
+    #[derive(Clone, PartialEq, Debug)]
+    pub struct Error;
+}
+
+use state::*; // Import the state structs for internal use
+
+
 
 #[derive(Debug)]
 pub enum CounterPayload {
@@ -114,12 +115,12 @@ impl Runnable<CounterComponents> for Actor<CounterComponents> {
                     Some(message) = this.config.standard_receiver.recv() => {
                         trace!("Actor received STANDARD message: {:?}", message);
                         let current_state = this.state_machine.current_state.clone();
-                        this.state_machine.dispatch(&CounterMessageSet::StandardMessage(message), &current_state);
+                        this.state_machine.dispatch(CounterMessageSet::StandardMessage(message), &current_state, &this.handle.dest_id());
                     },
                     Some(message) = this.config.counter_receiver.recv() => {
                         trace!("Actor received COUNTER message: {:?}", message);
                         let current_state = this.state_machine.current_state.clone();
-                        this.state_machine.dispatch(&CounterMessageSet::CounterMessage(message), &current_state);
+                        this.state_machine.dispatch(CounterMessageSet::CounterMessage(message), &current_state, &this.handle.dest_id());
                     },
                     else => {
                         // If all channels closed, break out
@@ -132,24 +133,54 @@ impl Runnable<CounterComponents> for Actor<CounterComponents> {
     }
 }
 
+/* impl RunnableLocal<CounterComponents> for Actor<CounterComponents> {
+    fn run_actor(self: Box<Self>) -> Pin<Box<dyn Future<Output = ()> + 'static>> {
+        Box::pin(async move {
+            let mut this = self;
+            trace!("Run actor started. Listening for messages...");
+
+            loop {
+                select! {
+                    Some(message) = this.config.standard_receiver.recv() => {
+                        trace!("Actor received STANDARD message: {:?}", message);
+                        let current_state = this.state_machine.current_state.clone();
+                        this.state_machine.dispatch(&CounterMessageSet::StandardMessage(message), &current_state, &this.handle.source_id());
+                    },
+                    Some(message) = this.config.counter_receiver.recv() => {
+                        trace!("Actor received COUNTER message: {:?}", message);
+                        let current_state = this.state_machine.current_state.clone();
+                        this.state_machine.dispatch(&CounterMessageSet::CounterMessage(message), &current_state, &this.handle.source_id());
+                    },
+                    else => {
+                        // If all channels closed, break out
+                        trace!("All channels closed. Stopping actor run loop.");
+                        break;
+                    }
+                }
+            }
+        })
+    }
+} */
+
 impl State<CounterComponents> for Uninit {
     fn handle_message(
         &self,
-        message: &CounterMessageSet,
+        message: CounterMessageSet,
         _data: &mut CounterExtendedState,
-    ) -> Option<Transition<CounterStateEnum>> {
+        _self_id: &u16,
+    ) -> (Option<Transition<CounterStateEnum>>, Option<CounterMessageSet>) {
         trace!("Uninit handle message");
         match message {
             CounterMessageSet::StandardMessage(message) => {
                 match message.payload {
                     StandardPayload::Initialize => {
                         self.on_exit(_data); //TODO: Bug- Shoud not have to run this manually on transition
-                        Some(Transition::To(CounterStateEnum::NotStarted(NotStarted {})))
+                        (Some(Transition::To(CounterStateEnum::NotStarted(NotStarted))), None)
                     }
-                    _ => None,
+                    _ => (None, None),
                 }
             }
-            _ => None,
+            _ => (None, None),
         }
     }
     fn on_entry(&self, _data: &mut CounterExtendedState) {
@@ -161,46 +192,48 @@ impl State<CounterComponents> for Uninit {
         info!("This is the Actor Initialization");
     }
     fn parent(&self) -> CounterStateEnum {
-        CounterStateEnum::Uninit(Uninit {})
+        CounterStateEnum::Uninit(Uninit)
     }
 }
 
 impl State<CounterComponents> for Idle {
     fn handle_message(
         &self,
-        message: &CounterMessageSet,
+        message: CounterMessageSet,
         _data: &mut CounterExtendedState,
-    ) -> Option<Transition<CounterStateEnum>> {
+        _self_id: &u16,
+    ) -> (Option<Transition<CounterStateEnum>>, Option<CounterMessageSet>) {
         trace!("[Idle] handle_message: {:?}", message);
-        None
+        (None, None)
     }
 
     fn parent(&self) -> CounterStateEnum {
-        CounterStateEnum::Uninit(Uninit {})
+        CounterStateEnum::Uninit(Uninit)
     }
 }
 
 impl NotStarted {
     fn handle_counter_msg(
         &self,
-        msg: &Message<CounterPayload>,
+        msg: Message<CounterPayload>,
         data: &mut CounterExtendedState,
-    ) -> Option<Transition<CounterStateEnum>> {
+        _self_id: &u16,
+    ) -> (Option<Transition<CounterStateEnum>>, Option<CounterMessageSet>) {
         match &msg.payload {
             CounterPayload::SetCount(new_value) => {
                 data.count = **new_value;
                 debug!("[Idle] Set count to {}", data.count);
-                None // remain in Idle
+                (None, None) // remain in Idle
             }
             CounterPayload::SetMax(new_max) => {
                 data.max = **new_max;
                 debug!("[Idle] New max set to {}", data.max);
-                None
+                (None, None) // remain in Idle
             }
             CounterPayload::SetMin(new_min) => {
                 data.min = **new_min;
                 debug!("[Idle] New min set to {}", data.min);
-                None
+                (None, None) // remain in Idle
             }
             CounterPayload::CountEvent(event) => {
                 trace!("[Idle] Received CountEvent: {:?}", event);
@@ -208,15 +241,15 @@ impl NotStarted {
                     CountEvent::GetCount => {
                         debug!("[Idle] Current count: {}", data.count);
                         //TODO: send count
-                        None
+                        (None, None) // remain in Idle
                     }
                     CountEvent::StartCounting => {
-                        Some(Transition::To(CounterStateEnum::Counting(Counting {})))
+                        (Some(Transition::To(CounterStateEnum::Counting(Counting))), None)
                     }
-                    _ => None,
+                    _ => (None, None),
                 }
             }
-            _ => None,
+            _ => (None, None),
         }
     }
 }
@@ -224,18 +257,19 @@ impl NotStarted {
 impl State<CounterComponents> for NotStarted {
     fn handle_message(
         &self,
-        message: &CounterMessageSet,
+        message: CounterMessageSet,
         data: &mut CounterExtendedState,
-    ) -> Option<Transition<CounterStateEnum>> {
+        _self_id: &u16,
+    ) -> (Option<Transition<CounterStateEnum>>, Option<CounterMessageSet>) {
         trace!("[Idle] handle_message: {:?}", message);
         match message {
-            CounterMessageSet::CounterMessage(msg) => self.handle_counter_msg(msg, data),
-            _ => None,
+            CounterMessageSet::CounterMessage(msg) => self.handle_counter_msg(msg, data, _self_id),
+            _ => (None, None),
         }
     }
 
     fn parent(&self) -> CounterStateEnum {
-        CounterStateEnum::Idle(Idle {})
+        CounterStateEnum::Idle(Idle)
     }
 }
 
@@ -254,9 +288,10 @@ impl Counting {
 impl State<CounterComponents> for Counting {
     fn handle_message(
         &self,
-        message: &CounterMessageSet,
+        message: CounterMessageSet,
         data: &mut CounterExtendedState,
-    ) -> Option<Transition<CounterStateEnum>> {
+        _self_id: &u16,
+    ) -> (Option<Transition<CounterStateEnum>>, Option<CounterMessageSet>) {
         trace!("[Counting] handle_message: {:?}", message);
 
         match message {
@@ -264,61 +299,62 @@ impl State<CounterComponents> for Counting {
                 CounterPayload::Increment(amount) => {
                     self.do_increment(**amount, data);
                     if data.count >= data.max {
-                        Some(Transition::To(CounterStateEnum::Finished(Finished {})))
+                        (Some(Transition::To(CounterStateEnum::Finished(Finished))), None)
                     } else {
-                        None
+                        (None, None)
                     }
                 }
                 CounterPayload::Decrement(amount) => {
                     self.do_decrement(**amount, data);
                     if data.count <= data.min {
-                        Some(Transition::To(CounterStateEnum::Finished(Finished {})))
+                        (Some(Transition::To(CounterStateEnum::Finished(Finished))), None)
                     } else {
-                        None
+                        (None, None)
                     }
                 }
                 CounterPayload::CountEvent(event) => match **event {
                     CountEvent::GetCount => {
                         debug!("[Counting] Current count: {}", data.count);
                         //TODO: send count
-                        None
+                        (None, None)
                     }
                     CountEvent::Reset => {
-                        Some(Transition::To(CounterStateEnum::NotStarted(NotStarted {})))
+                        (Some(Transition::To(CounterStateEnum::NotStarted(NotStarted))), None)
                     }
-                    _ => None,
+                    _ => (None, None),
                 },
 
-                _ => None,
+                _ => (None, None),
             },
-            _ => None,
+            _ => (None, None),
         }
     }
 
     fn parent(&self) -> CounterStateEnum {
-        CounterStateEnum::Uninit(Uninit {})
+        CounterStateEnum::Uninit(Uninit)
     }
 }
 
 impl State<CounterComponents> for Finished {
     fn handle_message(
         &self,
-        message: &CounterMessageSet,
+        message: CounterMessageSet,
         data: &mut CounterExtendedState,
-    ) -> Option<Transition<CounterStateEnum>> {
+        _self_id: &u16,
+    ) -> (Option<Transition<CounterStateEnum>>, Option<CounterMessageSet>) {
         trace!("[Finished] handle_message: {:?}", message);
         match message {
             CounterMessageSet::CounterMessage(msg) => match &msg.payload {
                 CounterPayload::CountEvent(event) => match **event {
                     CountEvent::Reset => {
                         data.count = 0;
-                        Some(Transition::To(CounterStateEnum::NotStarted(NotStarted {})))
+                        (Some(Transition::To(CounterStateEnum::NotStarted(NotStarted))), None)
                     }
-                    _ => None,
+                    _ => (None, None),
                 },
-                _ => None,
+                _ => (None, None),
             },
-            _ => None,
+            _ => (None, None),
         }
     }
 
@@ -332,34 +368,35 @@ impl State<CounterComponents> for Finished {
     }
 
     fn parent(&self) -> CounterStateEnum {
-        CounterStateEnum::Idle(Idle {})
+        CounterStateEnum::Idle(Idle)
     }
 }
 
 impl State<CounterComponents> for Error {
     fn handle_message(
         &self,
-        message: &CounterMessageSet,
+        message: CounterMessageSet,
         data: &mut CounterExtendedState,
-    ) -> Option<Transition<CounterStateEnum>> {
+        _self_id: &u16,
+    ) -> (Option<Transition<CounterStateEnum>>, Option<CounterMessageSet>) {
         trace!("[Error] handle_message: {:?}", message);
         match message {
             CounterMessageSet::CounterMessage(msg) => match &msg.payload {
                 CounterPayload::CountEvent(event) => match **event {
                     CountEvent::Reset => {
                         data.count = 0;
-                        Some(Transition::To(CounterStateEnum::NotStarted(NotStarted {})))
+                        (Some(Transition::To(CounterStateEnum::NotStarted(NotStarted))), None)
                     }
-                    _ => None,
+                    _ => (None, None),
                 },
-                _ => None,
+                _ => (None, None),
             },
-            _ => None,
+            _ => (None, None),
         }
     }
 
     fn parent(&self) -> CounterStateEnum {
-        CounterStateEnum::Idle(Idle {})
+        CounterStateEnum::Idle(Idle)
     }
 }
 
@@ -390,16 +427,17 @@ impl State<CounterComponents> for CounterStateEnum {
 
     fn handle_message(
         &self,
-        message: &CounterMessageSet,
+        message: CounterMessageSet,
         data: &mut CounterExtendedState,
-    ) -> Option<Transition<CounterStateEnum>> {
+        _self_id: &u16,
+    ) -> (Option<Transition<CounterStateEnum>>, Option<CounterMessageSet>) {
         match self {
-            CounterStateEnum::Uninit(s) => s.handle_message(message, data),
-            CounterStateEnum::NotStarted(s) => s.handle_message(message, data),
-            CounterStateEnum::Idle(s) => s.handle_message(message, data),
-            CounterStateEnum::Counting(s) => s.handle_message(message, data),
-            CounterStateEnum::Finished(s) => s.handle_message(message, data),
-            CounterStateEnum::Error(s) => s.handle_message(message, data),
+            CounterStateEnum::Uninit(s) => s.handle_message(message, data, _self_id),
+            CounterStateEnum::NotStarted(s) => s.handle_message(message, data, _self_id),
+            CounterStateEnum::Idle(s) => s.handle_message(message, data, _self_id),
+            CounterStateEnum::Counting(s) => s.handle_message(message, data, _self_id),
+            CounterStateEnum::Finished(s) => s.handle_message(message, data, _self_id),
+            CounterStateEnum::Error(s) => s.handle_message(message, data, _self_id),
         }
     }
 

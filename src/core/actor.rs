@@ -3,6 +3,7 @@
 use crate::core::messaging::*;
 use crate::runtime::*;
 use crate::std_exports::*;
+use log::*;
 
 // A trait to encapsulate types needed for an actor
 pub trait Components {
@@ -14,40 +15,36 @@ pub trait Components {
 //Implement Runnable or RunnableLocal depending on if the actor implements Send
 pub trait Runnable<A: Components> {
     fn run_actor(self: Box<Self>) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>;
-    fn into_request(self: Box<Self>) -> StandardPayload
+    fn into_request(self: Box<Self>) -> SupervisorPayload
     where
         Self: Send + 'static,
     {
         let closure = move || {
             Box::pin(async move {
-                // We’re inside the closure, so we can now await run_actor():
                 self.run_actor().await
             }) as Pin<Box<dyn Future<Output = ()> + Send + 'static>>
         };
 
-        StandardPayload::SpawnRequest(Box::new(closure))
+        SupervisorPayload::Spawn(Box::new(closure))
     }
 }
 
 pub trait RunnableLocal<A: Components> {
     fn run_actor(self: Box<Self>) -> Pin<Box<dyn Future<Output = ()> + 'static>>;
-    fn into_request(self: Box<Self>) -> StandardPayload
+    fn into_request(self: Box<Self>) -> SupervisorLocalPayload
     where
         Self: Send + 'static,
     {
-        let _closure = move || {
+        let closure = move || {
             Box::pin(async move {
-                // We’re inside the closure, so we can now await run_actor():
                 self.run_actor().await
             }) as Pin<Box<dyn Future<Output = ()> + 'static>>
         };
 
-        StandardPayload::Error(Box::new("Not implemented".into()))
-        //StandardPayload::SpawnLocalRequest(Box::new(closure))
-        //TODO: Seperate Spawn and SpawnLocal into different Message Payload types due to Send restrictions
+        SupervisorLocalPayload::SpawnLocal(Box::new(closure))
     }
 }
-pub trait StateEnum: Default + Debug {
+pub trait StateEnum: Default + fmt::Debug {
     fn new() -> Self {
         Self::default()
     }
@@ -93,7 +90,8 @@ where
     }
 }
 
-pub struct StateMachine<S: Components> {
+pub struct StateMachine<S: Components>
+{
     pub current_state: S::StateEnum,
     //ExtendedState stored here to be passed to each state
     extended_state: S::ExtendedState,
@@ -112,20 +110,25 @@ where
     }
 
     //This is how messages get handled.  Structured so it can be called recursively for Parent transitions
-    pub fn dispatch(&mut self, message: &S::MessageSet, state: &S::StateEnum)
+    pub fn dispatch(&mut self, message: S::MessageSet, state: &S::StateEnum, self_id: &u16)
     where
         S::StateEnum: State<S>,
     {
-        //return result?
-
-        if let Some(transition) = state.handle_message(message, &mut self.extended_state) {
-            match transition {
-                Transition::Parent => {
-                    self.dispatch(message, &state.parent());
-                }
-                Transition::To(new_state) => {
-                    self.change_state(new_state);
-                }
+        let (transition, message_option) = state.handle_message(message, &mut self.extended_state, self_id);
+        match (transition, message_option) {
+            (Some(Transition::Parent), Some(message)) => {
+                trace!("Transitioning to parent state");
+                self.dispatch(message, &state.parent(), self_id);
+            }
+            (Some(Transition::Parent), None) => {
+                panic!("Transition to parent state without a message");
+            }
+            (Some(Transition::To(new_state)), _) => {
+                trace!("Transitioning to state: {:?}", new_state);
+                self.change_state(new_state);
+            }
+            _ => {
+                // Do nothing if transition is None regardless of message
             }
         }
     }
@@ -186,7 +189,7 @@ where
     }
 }
 
-pub trait State<C: Components> {
+pub trait State<C: Components>: 'static {
     //Default on_entry and on_exit functions do nothing, only need to be overridden if needed
     fn on_entry(&self, _data: &mut C::ExtendedState) {}
     fn on_exit(&self, _data: &mut C::ExtendedState) {}
@@ -196,7 +199,12 @@ pub trait State<C: Components> {
     }
     fn handle_message(
         &self,
-        _message: &C::MessageSet,
-        _data: &mut C::ExtendedState,
-    ) -> Option<Transition<C::StateEnum>>;
+        message: C::MessageSet,
+        data: &mut C::ExtendedState,
+        self_id: &u16,
+    ) -> (Option<Transition<C::StateEnum>>, Option<C::MessageSet>);
+
+    fn into_erased(self: Box<Self>) -> Box<dyn Any> {
+        Box::new(self)
+    }
 }

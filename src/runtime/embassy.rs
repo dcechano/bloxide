@@ -72,7 +72,7 @@ pub mod runtime {
 
     /// A convenience type alias
     pub type EmbassyHandle<M, Mutex, const Q: usize> =
-        Handle<M, &'static Channel<Mutex, Message<M>, Q>>;
+        Handle<&'static Channel<Mutex, Message<M>, Q>>;
 
     impl<M, Mutex: RawMutex + 'static, const Q: usize> MessageSender for EmbassyHandle<M, Mutex, Q> {
         type PayloadType = M;
