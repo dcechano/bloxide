@@ -8,7 +8,7 @@ use crate::CounterPayload;
 
 use super::ext_state::RootExtState;
 use super::messaging::RootMessage;
-use super::state::RootState;
+use super::state::RootStates;
 
 pub struct RootActorConfig {
     pub std_rx: mpsc::Receiver<Message<StandardPayload>>,
@@ -18,7 +18,7 @@ pub struct RootActorConfig {
 pub struct RootComponents;
 
 impl Components for RootComponents {
-    type StateEnum = RootState;
+    type StateEnum = RootStates;
     type MessageSet = RootMessage;
     type ExtendedState = RootExtState;
     type ActorConfig = RootActorConfig;

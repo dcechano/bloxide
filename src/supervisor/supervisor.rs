@@ -21,7 +21,7 @@ pub struct SupervisorConfig {
 #[cfg(feature = "runtime-tokio")]
 impl Uninit {
     fn spawn_root_actor(&self, future: Pin<Box<dyn Future<Output = ()> + Send>>) {
-       spawn(future);
+        spawn(future);
     }
 }
 
@@ -67,9 +67,9 @@ pub static SUPERVISOR_HANDLE: OnceLock<SupervisorHandle> = OnceLock::new();
 //pub static SUPERVISORLOCAL_HANDLE: OnceCell<SupervisorLocalHandle> = OnceCell::new();
 
 thread_local! {
-    pub static SUPERVISORLOCAL_HANDLE: OnceCell<SupervisorLocalHandle> = OnceCell::new();
+    pub static SUPERVISORLOCAL_HANDLE: OnceCell<SupervisorLocalHandle> = const {OnceCell::new()};
 
-   
+
 }
 
 pub fn init_supervisor_handle(handle: SupervisorHandle) {
@@ -147,6 +147,20 @@ pub struct SupervisorExtendedState {
     pub root_spawn_fn: Option<RootSpawnFn>,
     pub next_id: u16,
 }
+
+impl SupervisorExtendedState {
+    pub fn request_new_actor_handle(
+        &mut self,
+        queue_size: usize,
+    ) -> (StandardMessageHandle, StandardReceiver) {
+        let (new_handle, rx) =
+            create_channel_with_size::<StandardPayload>(self.next_id, queue_size);
+        self.actors.insert(new_handle.dest_id(), new_handle.clone());
+        self.next_id += 1;
+        (new_handle, rx)
+    }
+}
+
 impl ExtendedState for SupervisorExtendedState {
     fn new() -> Self {
         panic!("SupervisorExtendedState::new() should not be called");
@@ -171,7 +185,6 @@ impl SupervisorExtendedState {
         root_spawn_fn: RootSpawnFn,
         supervisor_handle: SupervisorHandle,
     ) -> SupervisorExtendedState {
-
         if supervisor_handle.dest_id() != 0 {
             panic!("Supervisor handle must have id 0");
         }
@@ -195,7 +208,6 @@ impl SupervisorExtendedState {
         root_spawn_fn: RootSpawnFn,
         supervisor_handle: SupervisorLocalHandle,
     ) -> SupervisorExtendedState {
-
         if supervisor_handle.dest_id() != 0 {
             panic!("Supervisor handle must have id 0");
         }
@@ -220,7 +232,7 @@ impl State<SupervisorComponents> for Uninit {
         &self,
         message: SupervisorMessageSet,
         _data: &mut SupervisorExtendedState,
-        _self_id: &u16,
+        self_id: &u16,
     ) -> (
         Option<Transition<SupervisorStateEnum>>,
         Option<SupervisorMessageSet>,
@@ -230,7 +242,7 @@ impl State<SupervisorComponents> for Uninit {
             SupervisorMessageSet::StandardMessage(message) => {
                 match message.payload {
                     StandardPayload::Initialize => {
-                        self.on_exit(_data); //TODO: Bug- Shoud not have to run this manually on transition
+                        self.on_exit(_data, self_id); //TODO: Bug- Shoud not have to run this manually on transition
                         (
                             Some(Transition::To(SupervisorStateEnum::Running(Running))),
                             None,
@@ -243,11 +255,11 @@ impl State<SupervisorComponents> for Uninit {
         };
         (transition, message_option)
     }
-    fn on_entry(&self, _data: &mut SupervisorExtendedState) {
+    fn on_entry(&self, _data: &mut SupervisorExtendedState, _self_id: &u16) {
         info!("Uninit on_entry");
         info!("This is the Actor Shutdown");
     }
-    fn on_exit(&self, data: &mut SupervisorExtendedState) {
+    fn on_exit(&self, data: &mut SupervisorExtendedState, _self_id: &u16) {
         info!("Uninit on_exit");
         info!("This is the Actor Initialization");
 
@@ -257,12 +269,11 @@ impl State<SupervisorComponents> for Uninit {
             self.spawn_root_actor(future);
             if let Some(actor_handle) = data.actors.get(&1) {
                 trace!("Sending Initialize message to root actor");
-                let _ =actor_handle.try_send(Message::new(0, StandardPayload::Initialize));
+                let _ = actor_handle.try_send(Message::new(0, StandardPayload::Initialize));
             } else {
                 panic!("Actor with id 1 not found");
             }
-        }
-        else {
+        } else {
             panic!("Root spawn function not found");
         }
     }
@@ -275,8 +286,8 @@ impl State<SupervisorComponents> for Running {
     fn handle_message(
         &self,
         message: SupervisorMessageSet,
-        _data: &mut SupervisorExtendedState,
-        _self_id: &u16,
+        data: &mut SupervisorExtendedState,
+        self_id: &u16,
     ) -> (
         Option<Transition<SupervisorStateEnum>>,
         Option<SupervisorMessageSet>,
@@ -286,6 +297,16 @@ impl State<SupervisorComponents> for Running {
             SupervisorMessageSet::SupervisorMessage(message) => match message.payload {
                 SupervisorPayload::Spawn(spawn_fn) => {
                     self.spawn_actor(spawn_fn());
+                    (None, None)
+                }
+                SupervisorPayload::RequestNewActorHandle(queue_size) => {
+                    let (new_handle, rx) = data.request_new_actor_handle(queue_size);
+                    //get handle for the id in the message to send the response
+                    let handle = data.actors.get(&message.source_id()).unwrap();
+                    let _ = handle.try_send(Message::new(
+                        *self_id,
+                        StandardPayload::StandardChannel(new_handle, rx),
+                    ));
                     (None, None)
                 }
                 _ => (None, None),
@@ -322,19 +343,19 @@ impl State<SupervisorComponents> for Error {
 //TODO: Generate this from a macro
 
 impl State<SupervisorComponents> for SupervisorStateEnum {
-    fn on_entry(&self, data: &mut SupervisorExtendedState) {
+    fn on_entry(&self, data: &mut SupervisorExtendedState, self_id: &u16) {
         match self {
-            SupervisorStateEnum::Uninit(s) => s.on_entry(data),
-            SupervisorStateEnum::Running(s) => s.on_entry(data),
-            SupervisorStateEnum::Error(s) => s.on_entry(data),
+            SupervisorStateEnum::Uninit(s) => s.on_entry(data, self_id),
+            SupervisorStateEnum::Running(s) => s.on_entry(data, self_id),
+            SupervisorStateEnum::Error(s) => s.on_entry(data, self_id),
         }
     }
 
-    fn on_exit(&self, data: &mut SupervisorExtendedState) {
+    fn on_exit(&self, data: &mut SupervisorExtendedState, self_id: &u16) {
         match self {
-            SupervisorStateEnum::Uninit(s) => s.on_exit(data),
-            SupervisorStateEnum::Running(s) => s.on_exit(data),
-            SupervisorStateEnum::Error(s) => s.on_exit(data),
+            SupervisorStateEnum::Uninit(s) => s.on_exit(data, self_id),
+            SupervisorStateEnum::Running(s) => s.on_exit(data, self_id),
+            SupervisorStateEnum::Error(s) => s.on_exit(data, self_id),
         }
     }
 
@@ -342,15 +363,15 @@ impl State<SupervisorComponents> for SupervisorStateEnum {
         &self,
         message: SupervisorMessageSet,
         data: &mut SupervisorExtendedState,
-        _self_id: &u16,
+        self_id: &u16,
     ) -> (
         Option<Transition<SupervisorStateEnum>>,
         Option<SupervisorMessageSet>,
     ) {
         match self {
-            SupervisorStateEnum::Uninit(s) => s.handle_message(message, data, _self_id),
-            SupervisorStateEnum::Running(s) => s.handle_message(message, data, _self_id),
-            SupervisorStateEnum::Error(s) => s.handle_message(message, data, _self_id),
+            SupervisorStateEnum::Uninit(s) => s.handle_message(message, data, self_id),
+            SupervisorStateEnum::Running(s) => s.handle_message(message, data, self_id),
+            SupervisorStateEnum::Error(s) => s.handle_message(message, data, self_id),
         }
     }
 
@@ -362,7 +383,6 @@ impl State<SupervisorComponents> for SupervisorStateEnum {
         }
     }
 }
-
 
 /* impl RunnableLocal<CounterComponents> for Actor<CounterComponents> {
     fn run_actor(self: Box<Self>) -> Pin<Box<dyn Future<Output = ()> + 'static>> {

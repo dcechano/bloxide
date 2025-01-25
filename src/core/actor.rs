@@ -20,9 +20,8 @@ pub trait Runnable<A: Components> {
         Self: Send + 'static,
     {
         let closure = move || {
-            Box::pin(async move {
-                self.run_actor().await
-            }) as Pin<Box<dyn Future<Output = ()> + Send + 'static>>
+            Box::pin(async move { self.run_actor().await })
+                as Pin<Box<dyn Future<Output = ()> + Send + 'static>>
         };
 
         SupervisorPayload::Spawn(Box::new(closure))
@@ -36,9 +35,8 @@ pub trait RunnableLocal<A: Components> {
         Self: Send + 'static,
     {
         let closure = move || {
-            Box::pin(async move {
-                self.run_actor().await
-            }) as Pin<Box<dyn Future<Output = ()> + 'static>>
+            Box::pin(async move { self.run_actor().await })
+                as Pin<Box<dyn Future<Output = ()> + 'static>>
         };
 
         SupervisorLocalPayload::SpawnLocal(Box::new(closure))
@@ -90,8 +88,7 @@ where
     }
 }
 
-pub struct StateMachine<S: Components>
-{
+pub struct StateMachine<S: Components> {
     pub current_state: S::StateEnum,
     //ExtendedState stored here to be passed to each state
     extended_state: S::ExtendedState,
@@ -114,7 +111,8 @@ where
     where
         S::StateEnum: State<S>,
     {
-        let (transition, message_option) = state.handle_message(message, &mut self.extended_state, self_id);
+        let (transition, message_option) =
+            state.handle_message(message, &mut self.extended_state, self_id);
         match (transition, message_option) {
             (Some(Transition::Parent), Some(message)) => {
                 trace!("Transitioning to parent state");
@@ -125,7 +123,7 @@ where
             }
             (Some(Transition::To(new_state)), _) => {
                 trace!("Transitioning to state: {:?}", new_state);
-                self.change_state(new_state);
+                self.change_state(new_state, self_id);
             }
             _ => {
                 // Do nothing if transition is None regardless of message
@@ -161,7 +159,7 @@ where
 
     //This is how states get changed
     //Traverses the correct on_exit and on_entry functions
-    fn change_state(&mut self, new_state: S::StateEnum) {
+    fn change_state(&mut self, new_state: S::StateEnum, self_id: &u16) {
         // Build current state path
         let current_path = self.build_state_path(self.current_state.clone());
 
@@ -176,12 +174,12 @@ where
         // Exit from current state up to (but not including) LCA
         // TODO: Bug - Because of this, UNINIT has to call its on_exit manually on Actor initialization
         for state in current_path[lca_index..].iter().rev() {
-            state.on_exit(&mut self.extended_state);
+            state.on_exit(&mut self.extended_state, self_id);
         }
 
         // Enter from LCA down to destination
         for state in dest_path[lca_index..].iter() {
-            state.on_entry(&mut self.extended_state);
+            state.on_entry(&mut self.extended_state, self_id);
         }
 
         // Set new current state
@@ -191,8 +189,8 @@ where
 
 pub trait State<C: Components>: 'static {
     //Default on_entry and on_exit functions do nothing, only need to be overridden if needed
-    fn on_entry(&self, _data: &mut C::ExtendedState) {}
-    fn on_exit(&self, _data: &mut C::ExtendedState) {}
+    fn on_entry(&self, _data: &mut C::ExtendedState, _self_id: &u16) {}
+    fn on_exit(&self, _data: &mut C::ExtendedState, _self_id: &u16) {}
     //All states must have a parent set
     fn parent(&self) -> C::StateEnum {
         panic!("No parent for this state");

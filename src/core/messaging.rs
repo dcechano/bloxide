@@ -1,5 +1,6 @@
 // Copyright 2025 Bloxide, all rights reserved
 
+use crate::runtime::*;
 use crate::std_exports::*;
 
 /// Basic message type that wraps any payload and has an id. Usually used as a "source id"
@@ -42,10 +43,7 @@ impl<S> Hash for Handle<S> {
 
 impl<S> Handle<S> {
     pub fn new(dest_id: u16, sender: S) -> Self {
-        Self {
-            dest_id,
-            sender,
-        }
+        Self { dest_id, sender }
     }
 
     pub fn dest_id(&self) -> u16 {
@@ -90,12 +88,12 @@ pub enum StandardPayload {
     PollState,
     State(Box<dyn Any + Send>),
     Error(Box<String>),
+    StandardChannel(StandardMessageHandle, StandardReceiver),
 }
-
-
 
 pub enum SupervisorPayload {
     Spawn(Box<dyn FnOnce() -> Pin<Box<dyn Future<Output = ()> + Send + 'static>> + Send + 'static>),
+    RequestNewActorHandle(usize),
     Error(Box<String>),
 }
 
@@ -103,15 +101,17 @@ impl fmt::Debug for SupervisorPayload {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             SupervisorPayload::Spawn(_) => write!(f, "Spawn"),
+            SupervisorPayload::RequestNewActorHandle(queue_size) => {
+                write!(f, "RequestNewActorHandle: {}", queue_size)
+            }
             SupervisorPayload::Error(e) => write!(f, "Error: {}", e),
         }
     }
 }
 
-
-
 pub enum SupervisorLocalPayload {
     SpawnLocal(Box<dyn FnOnce() -> Pin<Box<dyn Future<Output = ()> + 'static>> + 'static>),
+    RequestNewActorHandle(usize),
     Error(Box<String>),
 }
 
@@ -119,9 +119,10 @@ impl fmt::Debug for SupervisorLocalPayload {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             SupervisorLocalPayload::SpawnLocal(_) => write!(f, "SpawnLocal"),
+            SupervisorLocalPayload::RequestNewActorHandle(queue_size) => {
+                write!(f, "RequestNewActorHandle: {}", queue_size)
+            }
             SupervisorLocalPayload::Error(e) => write!(f, "Error: {}", e),
         }
     }
 }
-
-
