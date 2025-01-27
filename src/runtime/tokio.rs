@@ -2,15 +2,33 @@
 
 #[cfg(feature = "runtime-tokio")]
 pub mod runtime {
-    use crate::core::{actor::*, messaging::*};
+    use crate::core::messaging::*;
     use crate::std_exports::*;
-    use tokio::sync::mpsc;
+    pub use tokio::pin;
+    pub use tokio::runtime::Builder;
+    pub use tokio::select;
+    pub use tokio::sync::mpsc;
+    pub use tokio::task::*;
+    pub use tokio::time::{sleep, Duration};
 
     pub const DEFAULT_CHANNEL_SIZE: usize = 32;
 
     pub const STANDARD_MESSAGE_CHANNEL_SIZE: usize = DEFAULT_CHANNEL_SIZE;
 
-    pub type TokioHandle<M> = Handle<M, mpsc::Sender<Message<M>>>;
+    pub type TokioHandle<M> = Handle<TokioSender<M>>;
+    pub type TokioReceiver<M> = mpsc::Receiver<Message<M>>;
+    pub type TokioSender<M> = mpsc::Sender<Message<M>>;
+
+    /// Creates a new message channel with the default channel size
+    pub fn create_channel<M>(id: u16) -> (TokioHandle<M>, TokioReceiver<M>) {
+        create_channel_with_size::<M>(id, DEFAULT_CHANNEL_SIZE)
+    }
+
+    /// Creates a new message channel with the specified channel size
+    pub fn create_channel_with_size<M>(id: u16, size: usize) -> (TokioHandle<M>, TokioReceiver<M>) {
+        let (sender, receiver) = mpsc::channel::<Message<M>>(size);
+        (Handle::new(id, sender), receiver)
+    }
 
     impl<M> MessageSender for TokioHandle<M> {
         type PayloadType = M;
@@ -21,49 +39,9 @@ pub mod runtime {
     }
 
     pub type StandardMessageHandle = TokioHandle<StandardPayload>;
-
-    #[derive(Debug)]
-    pub struct TokioActorSpawner<const Q: usize, A: Actor> {
-        phantom: PhantomData<A>,
-    }
-
-    impl<const Q: usize, A: Actor> Default for TokioActorSpawner<Q, A> {
-        fn default() -> Self {
-            Self {
-                phantom: PhantomData,
-            }
-        }
-    }
-
-    impl<const Q: usize, A: Actor> TokioActorSpawner<Q, A> {
-        pub fn new() -> Self {
-            Self::default()
-        }
-    }
-
-    impl<const Q: usize, A> ActorSpawner for TokioActorSpawner<Q, A>
-    where
-        A: Actor + Debug + 'static,
-        A::MessageSet: From<Message<StandardPayload>>,
-        A::InitArgs: Default,
-    {
-        fn spawn(&self, id: u16) -> Result<StandardMessageHandle, ActorError> {
-            let (tx, mut rx) =
-                mpsc::channel::<Message<StandardPayload>>(STANDARD_MESSAGE_CHANNEL_SIZE);
-            let handle = StandardMessageHandle::new(id, tx);
-            let mut actor = A::new(id, handle.clone(), Default::default());
-
-            tokio::spawn(async move {
-                while let Some(msg) = rx.recv().await {
-                    actor.handle_message(&msg.into());
-                }
-            });
-
-            Ok(handle)
-        }
-    }
+    pub type StandardSender = TokioSender<StandardPayload>;
+    pub type StandardReceiver = TokioReceiver<StandardPayload>;
 }
-
 // Re-export everything from the internal module
 #[cfg(feature = "runtime-tokio")]
 pub use runtime::*;
