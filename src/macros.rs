@@ -8,9 +8,7 @@ macro_rules! wait_for_ctrl_c {
             Ok(()) => {
                 println!("\nShutting down...");
                 // Send shutdown messages
-                $(let _ = $actor.try_send(Message::<StandardPayload>::new(
-                    777, // TODO find better solution for message ID
-                    StandardPayload::Shutdown));)*
+                $($actor.send(StandardMessage::Shutdown);)*
             }
             Err(err) => eprintln!("Unable to listen for shutdown signal: {}", err),
         }
