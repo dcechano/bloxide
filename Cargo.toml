@@ -6,7 +6,6 @@ version = "0.0.1"
 edition = "2021"
 
 [features]
-# Make runtime selection required by having no default features
 default = ["runtime-tokio"]
 
 # Create a feature group for runtimes
@@ -28,9 +27,9 @@ embassy-sync = { version = "0.6.1", optional = true }
 embassy-executor = { version = "0.6.3", optional = true }
 embassy-futures = "0.1.1"
 
-# Other optional dependencies
 futures = { version = "0.3.31", optional = true }
 rand = { version = "0.8.5", optional = true }
+hashbrown = "0.15.2"
 
 [package.metadata.cargo-all-features]
 skip_feature_sets = [
@@ -39,3 +38,12 @@ skip_feature_sets = [
     # Skip testing all features together
     ["runtime-tokio", "runtime-embassy"]
 ]
+
+[lib]
+name = "bloxide"
+path = "src/lib.rs"
+
+[[example]]
+name = "demo"
+path = "examples/demo/main.rs"
+required-features = ["runtime-tokio"]

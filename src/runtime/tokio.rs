@@ -2,18 +2,34 @@
 
 #[cfg(feature = "runtime-tokio")]
 pub mod runtime {
-    use crate::core::{actor::*, messaging::*};
-    use crate::std_exports::*;
-    use tokio::sync::mpsc;
+    use crate::{core::messaging::*, std_exports::*};
+    pub use tokio::{pin, runtime::Builder, select, sync::mpsc, task::*, time::*};
 
     pub const DEFAULT_CHANNEL_SIZE: usize = 32;
 
     pub const STANDARD_MESSAGE_CHANNEL_SIZE: usize = DEFAULT_CHANNEL_SIZE;
 
-    pub type TokioHandle<M> = Handle<M, mpsc::Sender<Message<M>>>;
+    pub type TokioHandle<M> = Handle<mpsc::Sender<Message<M>>>;
+
+    impl<M> fmt::Debug for TokioHandle<M> {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            write!(f, "TokioHandle<{}>", self.dest_id)
+        }
+    }
 
     impl<M> MessageSender for TokioHandle<M> {
         type PayloadType = M;
+        type SenderType = mpsc::Sender<Message<M>>;
+        type ReceiverType = mpsc::Receiver<Message<M>>;
+
+        fn create_channel_with_size(
+            id: u16,
+            size: usize,
+        ) -> (Handle<Self::SenderType>, Self::ReceiverType) {
+            let (sender, receiver) = mpsc::channel::<Message<M>>(size);
+            let handle = Handle::new(id, sender);
+            (handle, receiver)
+        }
 
         fn try_send(&self, msg: Message<M>) -> Result<(), TrySendError<Message<M>>> {
             self.sender.try_send(msg)
@@ -21,48 +37,7 @@ pub mod runtime {
     }
 
     pub type StandardMessageHandle = TokioHandle<StandardPayload>;
-
-    #[derive(Debug)]
-    pub struct TokioActorSpawner<const Q: usize, A: Actor> {
-        phantom: PhantomData<A>,
-    }
-
-    impl<const Q: usize, A: Actor> Default for TokioActorSpawner<Q, A> {
-        fn default() -> Self {
-            Self {
-                phantom: PhantomData,
-            }
-        }
-    }
-
-    impl<const Q: usize, A: Actor> TokioActorSpawner<Q, A> {
-        pub fn new() -> Self {
-            Self::default()
-        }
-    }
-
-    impl<const Q: usize, A> ActorSpawner for TokioActorSpawner<Q, A>
-    where
-        A: Actor + Debug + 'static,
-        A::MessageSet: From<Message<StandardPayload>>,
-    {
-        fn spawn(&self, id: u16) -> Result<StandardMessageHandle, ActorError> {
-            let (tx, mut rx) =
-                mpsc::channel::<Message<StandardPayload>>(STANDARD_MESSAGE_CHANNEL_SIZE);
-            let handle = StandardMessageHandle::new(id, tx);
-            let mut actor = A::new(id, handle.clone());
-
-            tokio::spawn(async move {
-                while let Some(msg) = rx.recv().await {
-                    actor.handle_message(&msg.into());
-                }
-            });
-
-            Ok(handle)
-        }
-    }
 }
-
 // Re-export everything from the internal module
 #[cfg(feature = "runtime-tokio")]
 pub use runtime::*;

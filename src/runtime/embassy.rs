@@ -2,12 +2,11 @@
 
 #[cfg(feature = "runtime-embassy")]
 pub mod runtime {
-    use crate::core::messaging::*;
-    use crate::std_exports::*;
+    use crate::{core::messaging::*, std_exports::*};
     use core::cell::RefCell;
     use embassy_sync::blocking_mutex::raw::RawMutex;
-    use embassy_sync::channel::Channel;
-    use embassy_sync::channel::TrySendError;
+    use embassy_sync::channel::{Channel, TrySendError};
+
     pub type DefaultChannelMutex = embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
     pub const DEFAULT_CHANNEL_SIZE: usize = 8;
 
@@ -17,7 +16,25 @@ pub mod runtime {
         EmbassyHandle<StandardPayload, StandardMessageChannelMutex, STANDARD_MESSAGE_CHANNEL_SIZE>;
     pub type StandardMessagePool = ChannelPool<StandardMessageHandle>;
 
-    /// An entry in our pool: a single channel plus "in_use" flag
+    pub struct EmbassyReceiver<M: 'static, Mutex: RawMutex + Sync + 'static, const Q: usize> {
+        pub channel: &'static Channel<Mutex, Message<M>, Q>,
+    }
+
+    impl<M: 'static, Mutex: RawMutex + Sync + 'static, const Q: usize> fmt::Debug
+        for EmbassyReceiver<M, Mutex, Q>
+    {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            write!(f, "EmbassyReceiver")
+        }
+    }
+
+    impl<M: 'static, Mutex: RawMutex + Sync + 'static, const Q: usize> fmt::Debug
+        for EmbassyHandle<M, Mutex, Q>
+    {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            write!(f, "EmbassyHandle, ID: {}", self.dest_id)
+        }
+    }
     struct PooledHandle<H> {
         handle: Option<H>,
     }
@@ -71,12 +88,24 @@ pub mod runtime {
 
     /// A convenience type alias
     pub type EmbassyHandle<M, Mutex, const Q: usize> =
-        Handle<M, &'static Channel<Mutex, Message<M>, Q>>;
+        Handle<&'static Channel<Mutex, Message<M>, Q>>;
 
-    impl<M, Mutex: RawMutex + 'static, const Q: usize> MessageSender for EmbassyHandle<M, Mutex, Q> {
+    impl<M, Mutex: RawMutex + Sync + 'static, const Q: usize> MessageSender
+        for EmbassyHandle<M, Mutex, Q>
+    {
         type PayloadType = M;
+        type SenderType = &'static Channel<Mutex, Message<M>, Q>;
+        type ReceiverType = EmbassyReceiver<M, Mutex, Q>;
         fn try_send(&self, message: Message<M>) -> Result<(), TrySendError<Message<M>>> {
             self.sender.sender().try_send(message)
+        }
+        fn create_channel_with_size(
+            id: u16,
+            _size: usize,
+        ) -> (Handle<Self::SenderType>, Self::ReceiverType) {
+            let channel: &'static Channel<Mutex, Message<M>, Q> =
+                Box::leak(Box::new(Channel::new()));
+            (Handle::new(id, channel), EmbassyReceiver { channel })
         }
     }
 }

@@ -1,62 +1,71 @@
 // Copyright 2025 Bloxide, all rights reserved
 
-use crate::core::actor::ActorSpawner;
-use crate::std_exports::*;
+use crate::{runtime::*, std_exports::*};
 
-/// Basic message type that wraps any payload and has an id. Usually used as a "source id"
+/// Basic message type that wraps any payload and has an id
 #[derive(Debug)]
-pub struct Message<T> {
-    pub id: u16,
-    pub payload: T,
+pub struct Message<P> {
+    pub source_id: u16,
+    pub payload: P,
 }
 
-impl<T> Message<T> {
-    pub fn new(id: u16, payload: T) -> Self {
-        Self { id, payload }
+impl<P> Message<P> {
+    pub fn new(source_id: u16, payload: P) -> Self {
+        Self { source_id, payload }
     }
 
-    pub fn id(&self) -> u16 {
-        self.id
+    pub fn source_id(&self) -> u16 {
+        self.source_id
     }
 }
+
+/// Marker trait for message sets
+pub trait MessageSet {}
 
 /// Handle type that corresponds to a specific message type
-#[derive(Debug)]
-pub struct Handle<M, S> {
-    pub id: u16,
+pub struct Handle<S> {
+    pub dest_id: u16,
     pub sender: S,
-    pub _phantom: PhantomData<M>,
 }
 
-impl<M, S> Handle<M, S> {
-    pub fn new(id: u16, sender: S) -> Self {
-        Self {
-            id,
-            sender,
-            _phantom: PhantomData,
-        }
+impl<S> PartialEq for Handle<S> {
+    fn eq(&self, other: &Self) -> bool {
+        self.dest_id == other.dest_id
+    }
+}
+
+impl<S> Eq for Handle<S> {}
+
+impl<S> Hash for Handle<S> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.dest_id.hash(state);
+    }
+}
+
+impl<S> Handle<S> {
+    pub fn new(dest_id: u16, sender: S) -> Self {
+        Self { dest_id, sender }
     }
 
-    pub fn id(&self) -> u16 {
-        self.id
+    pub fn dest_id(&self) -> u16 {
+        self.dest_id
     }
 }
 
 /// Add manual Clone implementation that only requires S: Clone
 /// This allows `Message<T>`to be passed by value if necessary
-impl<M, S: Clone + Send> Clone for Handle<M, S> {
+impl<S: Clone> Clone for Handle<S> {
     fn clone(&self) -> Self {
         Self {
-            id: self.id,
+            dest_id: self.dest_id,
             sender: self.sender.clone(),
-            _phantom: PhantomData,
         }
     }
 }
 
 /// Implement type erasure to send any Handle over channels
-impl<M: Send + 'static, S: Clone + Send + 'static> Handle<M, S> {
-    pub fn into_erased(self) -> Box<dyn Any + Send> {
+impl<S: Clone + 'static> Handle<S> {
+    pub fn into_erased(self) -> Box<dyn Any> {
         Box::new(self)
     }
 }
@@ -64,29 +73,30 @@ impl<M: Send + 'static, S: Clone + Send + 'static> Handle<M, S> {
 /// Trait for handles to send messages
 pub trait MessageSender {
     type PayloadType;
+    type SenderType;
+    type ReceiverType;
     fn try_send(
         &self,
         msg: Message<Self::PayloadType>,
     ) -> Result<(), TrySendError<Message<Self::PayloadType>>>;
+
+    fn create_channel_with_size(
+        id: u16,
+        size: usize,
+    ) -> (Handle<Self::SenderType>, Self::ReceiverType);
 }
 
 /// Enum for standard payloads
+#[derive(Debug)]
 pub enum StandardPayload {
-    Initialize,
     Shutdown,
-    RegisterSender(Box<dyn Any + Send>),
-    SpawnRequest(Box<dyn ActorSpawner>),
-    Error(String),
-}
-
-impl Debug for StandardPayload {
-    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
-        match self {
-            StandardPayload::Initialize => write!(f, "Initialize"),
-            StandardPayload::Shutdown => write!(f, "Shutdown"),
-            StandardPayload::RegisterSender(_) => write!(f, "RegisterSender(...)"),
-            StandardPayload::SpawnRequest(_) => write!(f, "SpawnRequest(...)"),
-            StandardPayload::Error(msg) => write!(f, "Error({})", msg),
-        }
-    }
+    PollHandle,
+    Handle(Box<dyn Any + Send>),
+    PollState,
+    State(Box<dyn Any + Send>),
+    Error(Box<String>),
+    StandardChannel(
+        StandardMessageHandle,
+        <StandardMessageHandle as MessageSender>::ReceiverType,
+    ),
 }
