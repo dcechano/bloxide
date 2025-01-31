@@ -13,6 +13,12 @@ impl Components for CounterComponents {
     type MessageSet = CounterMessageSet;
     type ExtendedState = CounterExtendedState;
     type Receivers = CounterReceivers;
+    type Handles = CounterHandles;
+}
+
+pub struct CounterHandles {
+    pub standard_handle: StandardMessageHandle,
+    pub counter_handle: CounterHandle,
 }
 
 pub struct CounterReceivers {

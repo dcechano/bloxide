@@ -1,6 +1,6 @@
 // Copyright 2025 Bloxide, all rights reserved
 
-use crate::blox::counter::{components::*, ext_state::*, messaging::*, states::*};
+use crate::blox::counter::{components::*, messaging::*, states::*};
 use bloxide::core::state_machine::*;
 use log::*;
 
@@ -14,14 +14,10 @@ impl State<CounterComponents> for Idle {
 
     fn handle_message(
         &self,
+        _state_machine: &mut StateMachine<CounterComponents>,
         message: CounterMessageSet,
-        _data: &mut CounterExtendedState,
-        _self_id: &u16,
-    ) -> (
-        Option<Transition<CounterStateEnum>>,
-        Option<CounterMessageSet>,
-    ) {
+    ) -> Option<Transition<CounterStateEnum, CounterMessageSet>> {
         trace!("State: {:?} handle_message: {:?}", self, message);
-        (None, None)
+        None
     }
 }

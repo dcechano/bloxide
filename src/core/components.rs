@@ -13,6 +13,7 @@ pub trait Components {
     type States: StateEnum + Default;
     type MessageSet: MessageSet;
     type Receivers;
+    type Handles;
 }
 
 //The main blox struct.  Bloxes are differentiated by their components
@@ -34,10 +35,11 @@ where
         standard_handle: StandardMessageHandle,
         receivers: C::Receivers,
         extended_state: C::ExtendedState,
+        self_handles: C::Handles,
     ) -> Self {
         Self {
             handle: standard_handle.clone(),
-            state_machine: StateMachine::<C>::new(extended_state),
+            state_machine: StateMachine::<C>::new(extended_state, self_handles),
             receivers,
         }
     }

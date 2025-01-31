@@ -19,35 +19,37 @@ impl State<SupervisorComponents> for Running {
 
     fn handle_message(
         &self,
+        state_machine: &mut StateMachine<SupervisorComponents>,
         message: SupervisorMessageSet,
-        data: &mut SupervisorExtendedState,
-        self_id: &u16,
-    ) -> (
-        Option<Transition<SupervisorStateEnum>>,
-        Option<SupervisorMessageSet>,
-    ) {
+    ) -> Option<Transition<SupervisorStateEnum, SupervisorMessageSet>> {
         trace!("[Running] handle_message: {:?}", message);
-        let (transition, message_option) = match message {
+        let transition = match message {
             SupervisorMessageSet::SupervisorMessage(message) => match message.payload {
                 SupervisorPayload::Spawn(spawn_fn) => {
                     self.spawn_blox(spawn_fn());
-                    (None, None)
+                    None
                 }
                 SupervisorPayload::RequestNewStandardHandle(queue_size) => {
-                    let (new_handle, rx) = data.request_new_standard_handle(queue_size);
+                    let (new_handle, rx) = state_machine
+                        .extended_state
+                        .request_new_standard_handle(queue_size);
                     // get handle for the id in the message to send the response
-                    let handle = data.blox.get(&message.source_id()).unwrap();
+                    let handle = state_machine
+                        .extended_state
+                        .blox
+                        .get(&message.source_id())
+                        .unwrap();
                     let _ = handle.try_send(Message::new(
-                        *self_id,
+                        state_machine.self_handles.standard_handle.dest_id,
                         StandardPayload::StandardChannel(new_handle, rx),
                     ));
-                    (None, None)
+                    None
                 }
-                _ => (None, None),
+                _ => None,
             },
-            _ => (None, None),
+            _ => None,
         };
-        (transition, message_option)
+        transition
     }
 }
 

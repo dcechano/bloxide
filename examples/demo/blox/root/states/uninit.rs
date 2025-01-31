@@ -14,13 +14,9 @@ impl State<RootComponents> for Uninit {
 
     fn handle_message(
         &self,
+        _state_machine: &mut StateMachine<RootComponents>,
         _msg: <RootComponents as Components>::MessageSet,
-        _data: &mut <RootComponents as Components>::ExtendedState,
-        _self_id: &u16,
-    ) -> (
-        Option<Transition<<RootComponents as Components>::States>>,
-        Option<<RootComponents as Components>::MessageSet>,
-    ) {
-        (None, None)
+    ) -> Option<Transition<RootStates, <RootComponents as Components>::MessageSet>> {
+        None
     }
 }

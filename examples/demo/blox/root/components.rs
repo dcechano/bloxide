@@ -14,6 +14,12 @@ impl Components for RootComponents {
     type MessageSet = RootMessage;
     type ExtendedState = RootExtState;
     type Receivers = RootReceivers;
+    type Handles = RootHandles;
+}
+
+pub struct RootHandles {
+    pub standard_handle: StandardMessageHandle,
+    pub counter_handle: CounterHandle,
 }
 
 pub struct RootReceivers {

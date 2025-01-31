@@ -30,8 +30,12 @@ async fn main() {
         counter_rx: root_counter_receiver,
     };
 
+    let root_handles = RootHandles {
+        standard_handle: root_standard_handle.clone(),
+        counter_handle: root_counter_handle,
+    };
+
     let root_init_args = RootInitArgs {
-        self_counter_handle: root_counter_handle,
         counter_handle: None,
     };
 
@@ -41,6 +45,7 @@ async fn main() {
         root_standard_handle.clone(),
         root_receivers,
         root_extended_state,
+        root_handles,
     );
 
     let root_spawn_fn = Box::new(|| -> Pin<Box<dyn Future<Output = ()> + Send>> {
@@ -54,11 +59,16 @@ async fn main() {
         Handle::create_channel_with_size(0, DEFAULT_CHANNEL_SIZE);
     let (supervisor_supervisor_handle, supervisor_receiver) =
         Handle::create_channel_with_size(0, DEFAULT_CHANNEL_SIZE);
-    init_supervisor_handle(supervisor_supervisor_handle);
+    init_supervisor_handle(supervisor_supervisor_handle.clone());
 
     let supervisor_receivers = SupervisorReceivers {
         standard_receiver,
         supervisor_receiver,
+    };
+
+    let supervisor_handles = SupervisorHandles {
+        standard_handle: supervisor_standard_handle.clone(),
+        supervisor_handle: supervisor_supervisor_handle,
     };
 
     let supervisor_init_args = SupervisorInitArgs {
@@ -71,6 +81,7 @@ async fn main() {
         supervisor_standard_handle.clone(),
         supervisor_receivers,
         supervisor_extended_state,
+        supervisor_handles,
     );
 
     // Spawn the supervisor.  It will automatically spawn the root blox.

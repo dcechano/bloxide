@@ -20,13 +20,9 @@ impl State<RootComponents> for Starting {
 
     fn handle_message(
         &self,
+        state_machine: &mut StateMachine<RootComponents>,
         msg: <RootComponents as Components>::MessageSet,
-        data: &mut <RootComponents as Components>::ExtendedState,
-        self_id: &u16,
-    ) -> (
-        Option<Transition<<RootComponents as Components>::States>>,
-        Option<<RootComponents as Components>::MessageSet>,
-    ) {
+    ) -> Option<Transition<RootStates, <RootComponents as Components>::MessageSet>> {
         match msg {
             RootMessage::StandardMessage(msg) => match msg.payload {
                 StandardPayload::StandardChannel(new_standard_handle, standard_receiver) => {
@@ -35,57 +31,77 @@ impl State<RootComponents> for Starting {
                         DEFAULT_CHANNEL_SIZE,
                     );
 
-                    data.counter_handle = Some(counter_handle.clone());
+                    state_machine.extended_state.counter_handle = Some(counter_handle.clone());
 
                     let counter_receivers = CounterReceivers {
                         standard_receiver,
                         counter_receiver,
                     };
 
+                    let counter_handles = CounterHandles {
+                        standard_handle: new_standard_handle.clone(),
+                        counter_handle: counter_handle.clone(),
+                    };
+
                     let mut counter_extended_state = CounterExtendedState::new(());
                     counter_extended_state
                         .subscribers
-                        .push(data.self_counter_handle.clone());
+                        .push(state_machine.self_handles.counter_handle.clone());
 
                     let counter_blox = Blox::<CounterComponents>::new(
                         new_standard_handle.clone(),
                         counter_receivers,
                         counter_extended_state,
+                        counter_handles,
                     );
 
                     let spawn_request = Box::new(counter_blox).into_request();
 
-                    let _ = get_supervisor_handle().try_send(Message::new(*self_id, spawn_request));
+                    let _ = get_supervisor_handle().try_send(Message::new(
+                        state_machine.self_handles.standard_handle.dest_id,
+                        spawn_request,
+                    ));
 
-                    let _ = data
+                    state_machine
+                        .extended_state
                         .counter_handle
                         .as_ref()
                         .unwrap()
-                        .try_send(Message::new(*self_id, CounterPayload::SetMax(Box::new(4))));
+                        .try_send(Message::new(
+                            state_machine.self_handles.standard_handle.dest_id,
+                            CounterPayload::SetMax(Box::new(4)),
+                        ))
+                        .unwrap_or_else(|e| error!("Failed to send message: {:?}", e));
 
-                    (Some(Transition::To(RootStates::Counting(Counting))), None)
+                    Some(Transition::To(RootStates::Counting(Counting)))
                 }
-                _ => (None, None),
+                _ => None,
             },
-            _ => (None, None),
+            _ => None,
         }
     }
 
-    fn on_entry(&self, _data: &mut <RootComponents as Components>::ExtendedState, self_id: &u16) {
+    fn on_entry(&self, state_machine: &mut StateMachine<RootComponents>) {
         trace!("State on_entry: {:?}", self);
         // Request a new standard handle to start the counter blox
         let _ = get_supervisor_handle().try_send(Message::new(
-            *self_id,
+            state_machine.self_handles.standard_handle.dest_id,
             SupervisorPayload::RequestNewStandardHandle(DEFAULT_CHANNEL_SIZE),
         ));
     }
 
-    fn on_exit(&self, data: &mut <RootComponents as Components>::ExtendedState, self_id: &u16) {
+    fn on_exit(&self, state_machine: &mut StateMachine<RootComponents>) {
         trace!("State on_exit: {:?}", self);
         // Start the counter ping pong
-        let _ = data.counter_handle.as_ref().unwrap().try_send(Message::new(
-            *self_id,
-            CounterPayload::CountEvent(Box::new(CountEvent::StartCounting)),
-        ));
+        state_machine
+            .extended_state
+            .counter_handle
+            .as_ref()
+            .unwrap()
+            .try_send(Message::new(
+                state_machine.self_handles.standard_handle.dest_id,
+                CounterPayload::CountEvent(Box::new(CountEvent::StartCounting)),
+            ))
+            .unwrap_or_else(|e| error!("Failed to send message: {:?}", e));
     }
 }

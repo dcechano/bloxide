@@ -1,6 +1,7 @@
 // Copyright 2025 Bloxide, all rights reserved
 
 use crate::{runtime::*, std_exports::*};
+use serde::{Deserialize, Serialize};
 
 /// Basic message type that wraps any payload and has an id
 #[derive(Debug)]
@@ -17,6 +18,13 @@ impl<P> Message<P> {
     pub fn source_id(&self) -> u16 {
         self.source_id
     }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct RawPayload {
+    pub to: u16,
+    pub from: u16,
+    pub payload: Vec<u8>,
 }
 
 /// Marker trait for message sets
@@ -99,4 +107,6 @@ pub enum StandardPayload {
         StandardMessageHandle,
         <StandardMessageHandle as MessageSender>::ReceiverType,
     ),
+    RawInbound(u16, Vec<u8>),  // source id, payload
+    RawOutbound(u16, Vec<u8>), // dest id, payload
 }

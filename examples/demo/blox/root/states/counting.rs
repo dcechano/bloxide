@@ -17,39 +17,41 @@ impl State<RootComponents> for Counting {
 
     fn handle_message(
         &self,
+        state_machine: &mut StateMachine<RootComponents>,
         msg: <RootComponents as Components>::MessageSet,
-        data: &mut <RootComponents as Components>::ExtendedState,
-        self_id: &u16,
-    ) -> (
-        Option<Transition<RootStates>>,
-        Option<<RootComponents as Components>::MessageSet>,
-    ) {
+    ) -> Option<Transition<RootStates, <RootComponents as Components>::MessageSet>> {
         match msg {
             RootMessage::CounterMessage(msg) => match msg.payload {
                 CounterPayload::CountEvent(event) => match *event {
-                    CountEvent::MaxReached => {
-                        (Some(Transition::To(RootStates::Finished(Finished))), None)
-                    }
-                    CountEvent::MinReached => {
-                        (Some(Transition::To(RootStates::Finished(Finished))), None)
-                    }
-                    _ => (None, None),
+                    CountEvent::MaxReached => Some(Transition::To(RootStates::Finished(Finished))),
+                    CountEvent::MinReached => Some(Transition::To(RootStates::Finished(Finished))),
+                    _ => None,
                 },
                 CounterPayload::SetCount(count) => {
                     info!("Current count: {}", count);
-                    let _ = data.counter_handle.as_ref().unwrap().try_send(Message::new(
-                        *self_id,
-                        CounterPayload::Increment(Box::new(1)),
-                    ));
-                    let _ = data.counter_handle.as_ref().unwrap().try_send(Message::new(
-                        *self_id,
-                        CounterPayload::CountEvent(Box::new(CountEvent::GetCount)),
-                    ));
-                    (None, None)
+                    let _ = state_machine
+                        .extended_state
+                        .counter_handle
+                        .as_ref()
+                        .unwrap()
+                        .try_send(Message::new(
+                            state_machine.self_handles.standard_handle.dest_id,
+                            CounterPayload::Increment(Box::new(1)),
+                        ));
+                    let _ = state_machine
+                        .extended_state
+                        .counter_handle
+                        .as_ref()
+                        .unwrap()
+                        .try_send(Message::new(
+                            state_machine.self_handles.standard_handle.dest_id,
+                            CounterPayload::CountEvent(Box::new(CountEvent::GetCount)),
+                        ));
+                    None
                 }
-                _ => (None, None),
+                _ => None,
             },
-            _ => (None, None),
+            _ => None,
         }
     }
 }

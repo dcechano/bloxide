@@ -10,11 +10,17 @@ impl Components for SupervisorComponents {
     type MessageSet = SupervisorMessageSet;
     type ExtendedState = SupervisorExtendedState;
     type Receivers = SupervisorReceivers;
+    type Handles = SupervisorHandles;
 }
 
 pub struct SupervisorReceivers {
     pub standard_receiver: <StandardMessageHandle as MessageSender>::ReceiverType,
     pub supervisor_receiver: <SupervisorHandle as MessageSender>::ReceiverType,
+}
+
+pub struct SupervisorHandles {
+    pub standard_handle: StandardMessageHandle,
+    pub supervisor_handle: SupervisorHandle,
 }
 
 pub struct SupervisorInitArgs {

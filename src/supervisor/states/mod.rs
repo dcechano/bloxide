@@ -4,7 +4,7 @@ pub mod error;
 pub mod running;
 pub mod uninit;
 
-use super::{components::*, ext_state::*, messaging::*};
+use super::{components::*, messaging::*};
 use crate::core::state_machine::*;
 pub use {error::*, running::*, uninit::*};
 
@@ -22,35 +22,31 @@ impl Default for SupervisorStateEnum {
 impl StateEnum for SupervisorStateEnum {}
 
 impl State<SupervisorComponents> for SupervisorStateEnum {
-    fn on_entry(&self, data: &mut SupervisorExtendedState, self_id: &u16) {
+    fn on_entry(&self, state_machine: &mut StateMachine<SupervisorComponents>) {
         match self {
-            SupervisorStateEnum::Uninit(s) => s.on_entry(data, self_id),
-            SupervisorStateEnum::Running(s) => s.on_entry(data, self_id),
-            SupervisorStateEnum::Error(s) => s.on_entry(data, self_id),
+            SupervisorStateEnum::Uninit(s) => s.on_entry(state_machine),
+            SupervisorStateEnum::Running(s) => s.on_entry(state_machine),
+            SupervisorStateEnum::Error(s) => s.on_entry(state_machine),
         }
     }
 
-    fn on_exit(&self, data: &mut SupervisorExtendedState, self_id: &u16) {
+    fn on_exit(&self, state_machine: &mut StateMachine<SupervisorComponents>) {
         match self {
-            SupervisorStateEnum::Uninit(s) => s.on_exit(data, self_id),
-            SupervisorStateEnum::Running(s) => s.on_exit(data, self_id),
-            SupervisorStateEnum::Error(s) => s.on_exit(data, self_id),
+            SupervisorStateEnum::Uninit(s) => s.on_exit(state_machine),
+            SupervisorStateEnum::Running(s) => s.on_exit(state_machine),
+            SupervisorStateEnum::Error(s) => s.on_exit(state_machine),
         }
     }
 
     fn handle_message(
         &self,
+        state_machine: &mut StateMachine<SupervisorComponents>,
         message: SupervisorMessageSet,
-        data: &mut SupervisorExtendedState,
-        self_id: &u16,
-    ) -> (
-        Option<Transition<SupervisorStateEnum>>,
-        Option<SupervisorMessageSet>,
-    ) {
+    ) -> Option<Transition<SupervisorStateEnum, SupervisorMessageSet>> {
         match self {
-            SupervisorStateEnum::Uninit(s) => s.handle_message(message, data, self_id),
-            SupervisorStateEnum::Running(s) => s.handle_message(message, data, self_id),
-            SupervisorStateEnum::Error(s) => s.handle_message(message, data, self_id),
+            SupervisorStateEnum::Uninit(s) => s.handle_message(state_machine, message),
+            SupervisorStateEnum::Running(s) => s.handle_message(state_machine, message),
+            SupervisorStateEnum::Error(s) => s.handle_message(state_machine, message),
         }
     }
 

@@ -1,7 +1,7 @@
 // Copyright 2025 Bloxide, all rights reserved
 
 use super::*;
-use crate::blox::counter::{components::*, ext_state::*, messaging::*};
+use crate::blox::counter::{components::*, messaging::*};
 use bloxide::core::state_machine::*;
 use log::*;
 
@@ -15,23 +15,19 @@ impl State<CounterComponents> for Uninit {
 
     fn handle_message(
         &self,
+        _state_machine: &mut StateMachine<CounterComponents>,
         _message: CounterMessageSet,
-        _data: &mut CounterExtendedState,
-        _self_id: &u16,
-    ) -> (
-        Option<Transition<CounterStateEnum>>,
-        Option<CounterMessageSet>,
-    ) {
+    ) -> Option<Transition<CounterStateEnum, CounterMessageSet>> {
         trace!("Uninit handle message");
-        (None, None)
+        None
     }
 
-    fn on_entry(&self, _data: &mut CounterExtendedState, _self_id: &u16) {
+    fn on_entry(&self, _data: &mut StateMachine<CounterComponents>) {
         trace!("State on_entry: {:?}", self);
         info!("This is the Blox Shutdown");
     }
 
-    fn on_exit(&self, _data: &mut CounterExtendedState, _self_id: &u16) {
+    fn on_exit(&self, _data: &mut StateMachine<CounterComponents>) {
         trace!("State on_exit: {:?}", self);
         info!("This is the Blox Initialization");
     }
