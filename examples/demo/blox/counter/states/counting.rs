@@ -15,72 +15,65 @@ impl State<CounterComponents> for Counting {
 
     fn handle_message(
         &self,
+        state_machine: &mut StateMachine<CounterComponents>,
         message: CounterMessageSet,
-        data: &mut CounterExtendedState,
-        self_id: &u16,
-    ) -> (
-        Option<Transition<CounterStateEnum>>,
-        Option<CounterMessageSet>,
-    ) {
+    ) -> Option<Transition<CounterStateEnum, CounterMessageSet>> {
         trace!("[Counting] handle_message: {:?}", message);
 
         match message {
             CounterMessageSet::CounterMessage(msg) => match &msg.payload {
                 CounterPayload::Increment(amount) => {
-                    self.do_increment(**amount, data);
-                    if data.count >= data.max {
-                        for subscriber in data.subscribers.iter() {
+                    self.do_increment(**amount, &mut state_machine.extended_state);
+                    if state_machine.extended_state.count >= state_machine.extended_state.max {
+                        for subscriber in state_machine.extended_state.subscribers.iter() {
                             let _ = subscriber.try_send(Message::new(
-                                *self_id,
+                                state_machine.self_handles.standard_handle.dest_id,
                                 CounterPayload::CountEvent(Box::new(CountEvent::MaxReached)),
                             ));
                         }
-                        (
-                            Some(Transition::To(CounterStateEnum::Finished(Finished))),
-                            None,
-                        )
+                        Some(Transition::To(CounterStateEnum::Finished(Finished)))
                     } else {
-                        (None, None)
+                        None
                     }
                 }
                 CounterPayload::Decrement(amount) => {
-                    self.do_decrement(**amount, data);
-                    if data.count <= data.min {
-                        for subscriber in data.subscribers.iter() {
+                    self.do_decrement(**amount, &mut state_machine.extended_state);
+                    if state_machine.extended_state.count <= state_machine.extended_state.min {
+                        for subscriber in state_machine.extended_state.subscribers.iter() {
                             let _ = subscriber.try_send(Message::new(
-                                *self_id,
+                                state_machine.self_handles.standard_handle.dest_id,
                                 CounterPayload::CountEvent(Box::new(CountEvent::MinReached)),
                             ));
                         }
-                        (
-                            Some(Transition::To(CounterStateEnum::Finished(Finished))),
-                            None,
-                        )
+                        Some(Transition::To(CounterStateEnum::Finished(Finished)))
                     } else {
-                        (None, None)
+                        None
                     }
                 }
                 CounterPayload::CountEvent(event) => match **event {
                     CountEvent::GetCount => {
-                        debug!("[Counting] Current count: {} Max: {}", data.count, data.max);
-                        for subscriber in data.subscribers.iter() {
+                        debug!(
+                            "[Counting] Current count: {} Max: {}",
+                            state_machine.extended_state.count, state_machine.extended_state.max
+                        );
+                        for subscriber in state_machine.extended_state.subscribers.iter() {
                             let _ = subscriber.try_send(Message::new(
-                                *self_id,
-                                CounterPayload::SetCount(Box::new(data.count)),
+                                state_machine.self_handles.standard_handle.dest_id,
+                                CounterPayload::SetCount(Box::new(
+                                    state_machine.extended_state.count,
+                                )),
                             ));
                         }
-                        (None, None)
+                        None
                     }
-                    CountEvent::Reset => (
-                        Some(Transition::To(CounterStateEnum::NotStarted(NotStarted))),
-                        None,
-                    ),
-                    _ => (None, None),
+                    CountEvent::Reset => {
+                        Some(Transition::To(CounterStateEnum::NotStarted(NotStarted)))
+                    }
+                    _ => None,
                 },
-
-                _ => (None, None),
+                _ => None,
             },
-            _ => (None, None),
+            _ => None,
         }
     }
 }

@@ -7,7 +7,7 @@ pub mod idle;
 pub mod not_started;
 pub mod uninit;
 
-use super::{components::*, ext_state::*, messaging::*};
+use super::{components::*, messaging::*};
 use bloxide::core::state_machine::*;
 pub use {
     counting::Counting, error::Error, finished::Finished, idle::Idle, not_started::NotStarted,
@@ -32,44 +32,40 @@ impl Default for CounterStateEnum {
 impl StateEnum for CounterStateEnum {}
 
 impl State<CounterComponents> for CounterStateEnum {
-    fn on_entry(&self, data: &mut CounterExtendedState, self_id: &u16) {
+    fn on_entry(&self, state_machine: &mut StateMachine<CounterComponents>) {
         match self {
-            CounterStateEnum::Uninit(s) => s.on_entry(data, self_id),
-            CounterStateEnum::NotStarted(s) => s.on_entry(data, self_id),
-            CounterStateEnum::Idle(s) => s.on_entry(data, self_id),
-            CounterStateEnum::Counting(s) => s.on_entry(data, self_id),
-            CounterStateEnum::Finished(s) => s.on_entry(data, self_id),
-            CounterStateEnum::Error(s) => s.on_entry(data, self_id),
+            CounterStateEnum::Uninit(s) => s.on_entry(state_machine),
+            CounterStateEnum::NotStarted(s) => s.on_entry(state_machine),
+            CounterStateEnum::Idle(s) => s.on_entry(state_machine),
+            CounterStateEnum::Counting(s) => s.on_entry(state_machine),
+            CounterStateEnum::Finished(s) => s.on_entry(state_machine),
+            CounterStateEnum::Error(s) => s.on_entry(state_machine),
         }
     }
 
-    fn on_exit(&self, data: &mut CounterExtendedState, self_id: &u16) {
+    fn on_exit(&self, data: &mut StateMachine<CounterComponents>) {
         match self {
-            CounterStateEnum::Uninit(s) => s.on_exit(data, self_id),
-            CounterStateEnum::NotStarted(s) => s.on_exit(data, self_id),
-            CounterStateEnum::Idle(s) => s.on_exit(data, self_id),
-            CounterStateEnum::Counting(s) => s.on_exit(data, self_id),
-            CounterStateEnum::Finished(s) => s.on_exit(data, self_id),
-            CounterStateEnum::Error(s) => s.on_exit(data, self_id),
+            CounterStateEnum::Uninit(s) => s.on_exit(data),
+            CounterStateEnum::NotStarted(s) => s.on_exit(data),
+            CounterStateEnum::Idle(s) => s.on_exit(data),
+            CounterStateEnum::Counting(s) => s.on_exit(data),
+            CounterStateEnum::Finished(s) => s.on_exit(data),
+            CounterStateEnum::Error(s) => s.on_exit(data),
         }
     }
 
     fn handle_message(
         &self,
+        state_machine: &mut StateMachine<CounterComponents>,
         message: CounterMessageSet,
-        data: &mut CounterExtendedState,
-        _self_id: &u16,
-    ) -> (
-        Option<Transition<CounterStateEnum>>,
-        Option<CounterMessageSet>,
-    ) {
+    ) -> Option<Transition<CounterStateEnum, CounterMessageSet>> {
         match self {
-            CounterStateEnum::Uninit(s) => s.handle_message(message, data, _self_id),
-            CounterStateEnum::NotStarted(s) => s.handle_message(message, data, _self_id),
-            CounterStateEnum::Idle(s) => s.handle_message(message, data, _self_id),
-            CounterStateEnum::Counting(s) => s.handle_message(message, data, _self_id),
-            CounterStateEnum::Finished(s) => s.handle_message(message, data, _self_id),
-            CounterStateEnum::Error(s) => s.handle_message(message, data, _self_id),
+            CounterStateEnum::Uninit(s) => s.handle_message(state_machine, message),
+            CounterStateEnum::NotStarted(s) => s.handle_message(state_machine, message),
+            CounterStateEnum::Idle(s) => s.handle_message(state_machine, message),
+            CounterStateEnum::Counting(s) => s.handle_message(state_machine, message),
+            CounterStateEnum::Finished(s) => s.handle_message(state_machine, message),
+            CounterStateEnum::Error(s) => s.handle_message(state_machine, message),
         }
     }
 

@@ -1,7 +1,7 @@
 // Copyright 2025 Bloxide, all rights reserved
 
 use super::*;
-use crate::blox::counter::{components::*, ext_state::*, messaging::*};
+use crate::blox::counter::{components::*, messaging::*};
 use bloxide::core::{messaging::*, state_machine::*};
 use log::*;
 
@@ -15,17 +15,13 @@ impl State<CounterComponents> for NotStarted {
 
     fn handle_message(
         &self,
+        state_machine: &mut StateMachine<CounterComponents>,
         message: CounterMessageSet,
-        data: &mut CounterExtendedState,
-        _self_id: &u16,
-    ) -> (
-        Option<Transition<CounterStateEnum>>,
-        Option<CounterMessageSet>,
-    ) {
+    ) -> Option<Transition<CounterStateEnum, CounterMessageSet>> {
         trace!("[Idle] handle_message: {:?}", message);
         match message {
-            CounterMessageSet::CounterMessage(msg) => self.handle_counter_msg(msg, data, _self_id),
-            _ => (None, None),
+            CounterMessageSet::CounterMessage(msg) => self.handle_counter_msg(msg, state_machine),
+            _ => None,
         }
     }
 }
@@ -34,52 +30,63 @@ impl NotStarted {
     fn handle_counter_msg(
         &self,
         msg: Message<CounterPayload>,
-        data: &mut CounterExtendedState,
-        self_id: &u16,
-    ) -> (
-        Option<Transition<CounterStateEnum>>,
-        Option<CounterMessageSet>,
-    ) {
+        state_machine: &mut StateMachine<CounterComponents>,
+    ) -> Option<Transition<CounterStateEnum, CounterMessageSet>> {
         match &msg.payload {
             CounterPayload::SetCount(new_value) => {
-                data.count = **new_value;
-                debug!("State: {:?} Set count to {}", self, data.count);
-                (None, None)
+                state_machine.extended_state.count = **new_value;
+                debug!(
+                    "State: {:?} Set count to {}",
+                    self, state_machine.extended_state.count
+                );
+                None
             }
             CounterPayload::SetMax(new_max) => {
-                data.max = **new_max;
-                debug!("State: {:?} New max set to {}", self, data.max);
-                (None, None)
+                state_machine.extended_state.max = **new_max;
+                debug!(
+                    "State: {:?} New max set to {}",
+                    self, state_machine.extended_state.max
+                );
+                None
             }
             CounterPayload::SetMin(new_min) => {
-                data.min = **new_min;
-                debug!("State: {:?} New min set to {}", self, data.min);
-                (None, None)
+                state_machine.extended_state.min = **new_min;
+                debug!(
+                    "State: {:?} New min set to {}",
+                    self, state_machine.extended_state.min
+                );
+                None
             }
             CounterPayload::CountEvent(event) => {
                 trace!("State: {:?} Received CountEvent: {:?}", self, event);
                 match **event {
                     CountEvent::GetCount => {
-                        debug!("State: {:?} Current count: {}", self, data.count);
+                        debug!(
+                            "State: {:?} Current count: {}",
+                            self, state_machine.extended_state.count
+                        );
 
-                        (None, None)
+                        None
                     }
                     CountEvent::StartCounting => {
-                        data.subscribers.iter().for_each(|subscriber| {
-                            let _ = subscriber.try_send(Message::new(
-                                *self_id,
-                                CounterPayload::SetCount(Box::new(data.count)),
-                            ));
-                        });
-                        (
-                            Some(Transition::To(CounterStateEnum::Counting(Counting))),
-                            None,
-                        )
+                        state_machine
+                            .extended_state
+                            .subscribers
+                            .iter()
+                            .for_each(|subscriber| {
+                                let _ = subscriber.try_send(Message::new(
+                                    state_machine.self_handles.standard_handle.dest_id,
+                                    CounterPayload::SetCount(Box::new(
+                                        state_machine.extended_state.count,
+                                    )),
+                                ));
+                            });
+                        Some(Transition::To(CounterStateEnum::Counting(Counting)))
                     }
-                    _ => (None, None),
+                    _ => None,
                 }
             }
-            _ => (None, None),
+            _ => None,
         }
     }
 }

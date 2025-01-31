@@ -14,26 +14,22 @@ impl State<SupervisorComponents> for Uninit {
     }
     fn handle_message(
         &self,
+        _state_machine: &mut StateMachine<SupervisorComponents>,
         _message: SupervisorMessageSet,
-        _data: &mut SupervisorExtendedState,
-        _self_id: &u16,
-    ) -> (
-        Option<Transition<SupervisorStateEnum>>,
-        Option<SupervisorMessageSet>,
-    ) {
+    ) -> Option<Transition<SupervisorStateEnum, SupervisorMessageSet>> {
         trace!("Uninit handle message");
         //Uninit never handles messages
-        (None, None)
+        None
     }
-    fn on_entry(&self, _data: &mut SupervisorExtendedState, _self_id: &u16) {
+    fn on_entry(&self, _data: &mut StateMachine<SupervisorComponents>) {
         trace!("State on_entry: {:?}", self);
         info!("This is the Blox Shutdown");
     }
-    fn on_exit(&self, data: &mut SupervisorExtendedState, _self_id: &u16) {
+    fn on_exit(&self, data: &mut StateMachine<SupervisorComponents>) {
         trace!("State on_exit: {:?}", self);
         info!("This is the Blox Initialization");
 
-        if let Some(spawn_fn) = data.root_spawn_fn.take() {
+        if let Some(spawn_fn) = data.extended_state.root_spawn_fn.take() {
             trace!("Running root spawn function");
             let future = spawn_fn();
             self.spawn_root(future);

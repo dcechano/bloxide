@@ -20,7 +20,6 @@ impl Runnable<SupervisorComponents> for Blox<SupervisorComponents> {
     fn run(mut self: Box<Self>) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>> {
         self.state_machine.init(
             &SupervisorStateEnum::Uninit(Uninit),
-            &self.handle.dest_id(),
             &SupervisorStateEnum::Running(Running),
         );
         Box::pin(async move {
@@ -29,11 +28,11 @@ impl Runnable<SupervisorComponents> for Blox<SupervisorComponents> {
                 select! {
                     Some(message) = self.receivers.standard_receiver.recv() => {
                         let current_state = self.state_machine.current_state.clone();
-                        self.state_machine.dispatch(SupervisorMessageSet::StandardMessage(message), &current_state, &self.handle.dest_id());
+                        self.state_machine.dispatch(SupervisorMessageSet::StandardMessage(message), &current_state);
                     },
                     Some(message) = self.receivers.supervisor_receiver.recv() => {
                         let current_state = self.state_machine.current_state.clone();
-                        self.state_machine.dispatch(SupervisorMessageSet::SupervisorMessage(message), &current_state, &self.handle.dest_id());
+                        self.state_machine.dispatch(SupervisorMessageSet::SupervisorMessage(message), &current_state);
                     },
                     else => {
                         // If all channels closed, break out

@@ -15,18 +15,14 @@ impl State<RootComponents> for Finished {
 
     fn handle_message(
         &self,
+        _state_machine: &mut StateMachine<RootComponents>,
         _msg: <RootComponents as Components>::MessageSet,
-        _data: &mut <RootComponents as Components>::ExtendedState,
-        _self_id: &u16,
-    ) -> (
-        Option<Transition<<RootComponents as Components>::States>>,
-        Option<<RootComponents as Components>::MessageSet>,
-    ) {
+    ) -> Option<Transition<RootStates, <RootComponents as Components>::MessageSet>> {
         //Program is finished, no more messages
-        (None, None)
+        None
     }
 
-    fn on_entry(&self, _data: &mut <RootComponents as Components>::ExtendedState, _self_id: &u16) {
+    fn on_entry(&self, _data: &mut StateMachine<RootComponents>) {
         trace!("State on_entry: {:?}", self);
         info!("♫ I CAN ONLY COUNT TO 4 ♫");
     }

@@ -1,6 +1,6 @@
 // Copyright 2025 Bloxide, all rights reserved
 
-use crate::blox::counter::{components::*, ext_state::*, messaging::*, states::*};
+use crate::blox::counter::{components::*, messaging::*, states::*};
 use bloxide::core::state_machine::*;
 use log::*;
 
@@ -14,29 +14,22 @@ impl State<CounterComponents> for Error {
 
     fn handle_message(
         &self,
+        state_machine: &mut StateMachine<CounterComponents>,
         message: CounterMessageSet,
-        data: &mut CounterExtendedState,
-        _self_id: &u16,
-    ) -> (
-        Option<Transition<CounterStateEnum>>,
-        Option<CounterMessageSet>,
-    ) {
+    ) -> Option<Transition<CounterStateEnum, CounterMessageSet>> {
         trace!("[Error] handle_message: {:?}", message);
         match message {
             CounterMessageSet::CounterMessage(msg) => match &msg.payload {
                 CounterPayload::CountEvent(event) => match **event {
                     CountEvent::Reset => {
-                        data.count = 0;
-                        (
-                            Some(Transition::To(CounterStateEnum::NotStarted(NotStarted))),
-                            None,
-                        )
+                        state_machine.extended_state.count = 0;
+                        Some(Transition::To(CounterStateEnum::NotStarted(NotStarted)))
                     }
-                    _ => (None, None),
+                    _ => None,
                 },
-                _ => (None, None),
+                _ => None,
             },
-            _ => (None, None),
+            _ => None,
         }
     }
 }

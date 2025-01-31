@@ -29,42 +29,38 @@ pub enum RootStates {
 impl State<RootComponents> for RootStates {
     fn handle_message(
         &self,
+        state_machine: &mut StateMachine<RootComponents>,
         message: <RootComponents as Components>::MessageSet,
-        data: &mut <RootComponents as Components>::ExtendedState,
-        self_id: &u16,
-    ) -> (
-        Option<Transition<<RootComponents as Components>::States>>,
-        Option<<RootComponents as Components>::MessageSet>,
-    ) {
+    ) -> Option<Transition<RootStates, <RootComponents as Components>::MessageSet>> {
         match self {
-            RootStates::Uninit(uninit) => uninit.handle_message(message, data, self_id),
-            RootStates::Counting(counting) => counting.handle_message(message, data, self_id),
-            RootStates::Finished(finished) => finished.handle_message(message, data, self_id),
-            RootStates::Error(error) => error.handle_message(message, data, self_id),
-            RootStates::Idle(idle) => idle.handle_message(message, data, self_id),
-            RootStates::Starting(starting) => starting.handle_message(message, data, self_id),
+            RootStates::Uninit(uninit) => uninit.handle_message(state_machine, message),
+            RootStates::Counting(counting) => counting.handle_message(state_machine, message),
+            RootStates::Finished(finished) => finished.handle_message(state_machine, message),
+            RootStates::Error(error) => error.handle_message(state_machine, message),
+            RootStates::Idle(idle) => idle.handle_message(state_machine, message),
+            RootStates::Starting(starting) => starting.handle_message(state_machine, message),
         }
     }
 
-    fn on_entry(&self, data: &mut <RootComponents as Components>::ExtendedState, self_id: &u16) {
+    fn on_entry(&self, state_machine: &mut StateMachine<RootComponents>) {
         match self {
-            RootStates::Uninit(s) => s.on_entry(data, self_id),
-            RootStates::Counting(s) => s.on_entry(data, self_id),
-            RootStates::Finished(s) => s.on_entry(data, self_id),
-            RootStates::Error(s) => s.on_entry(data, self_id),
-            RootStates::Idle(s) => s.on_entry(data, self_id),
-            RootStates::Starting(s) => s.on_entry(data, self_id),
+            RootStates::Uninit(s) => s.on_entry(state_machine),
+            RootStates::Counting(s) => s.on_entry(state_machine),
+            RootStates::Finished(s) => s.on_entry(state_machine),
+            RootStates::Error(s) => s.on_entry(state_machine),
+            RootStates::Idle(s) => s.on_entry(state_machine),
+            RootStates::Starting(s) => s.on_entry(state_machine),
         }
     }
 
-    fn on_exit(&self, data: &mut <RootComponents as Components>::ExtendedState, self_id: &u16) {
+    fn on_exit(&self, state_machine: &mut StateMachine<RootComponents>) {
         match self {
-            RootStates::Uninit(uninit) => uninit.on_exit(data, self_id),
-            RootStates::Counting(counting) => counting.on_exit(data, self_id),
-            RootStates::Finished(finished) => finished.on_exit(data, self_id),
-            RootStates::Error(error) => error.on_exit(data, self_id),
-            RootStates::Idle(idle) => idle.on_exit(data, self_id),
-            RootStates::Starting(starting) => starting.on_exit(data, self_id),
+            RootStates::Uninit(uninit) => uninit.on_exit(state_machine),
+            RootStates::Counting(counting) => counting.on_exit(state_machine),
+            RootStates::Finished(finished) => finished.on_exit(state_machine),
+            RootStates::Error(error) => error.on_exit(state_machine),
+            RootStates::Idle(idle) => idle.on_exit(state_machine),
+            RootStates::Starting(starting) => starting.on_exit(state_machine),
         }
     }
 

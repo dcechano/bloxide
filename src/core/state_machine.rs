@@ -16,15 +16,16 @@ pub trait ExtendedState {
 
 /// Used as `Option<Transition<T>>`, `None` = No transition
 /// Errors handled as transitions to a Error state
-pub enum Transition<T> {
+pub enum Transition<T, M> {
     To(T),
-    Parent,
+    Parent(M),
 }
 
 pub struct StateMachine<C: Components> {
     pub current_state: C::States,
     // ExtendedState stored here to be passed to each state
-    extended_state: C::ExtendedState,
+    pub extended_state: C::ExtendedState,
+    pub self_handles: C::Handles,
 }
 
 impl<C> StateMachine<C>
@@ -32,37 +33,34 @@ where
     C: Components,
     C::States: State<C> + Clone + PartialEq + Default,
 {
-    pub fn new(extended_state: C::ExtendedState) -> Self {
+    pub fn new(extended_state: C::ExtendedState, self_handles: C::Handles) -> Self {
         Self {
             current_state: C::States::default(),
             extended_state,
+            self_handles,
         }
     }
 
     // Initializes the state machine, performs the Uninit state transition
-    pub fn init(&mut self, uninit: &C::States, self_id: &u16, entry_point: &C::States) {
-        uninit.on_exit(&mut self.extended_state, self_id);
-        self.change_state(entry_point.clone(), self_id);
+    pub fn init(&mut self, uninit: &C::States, entry_point: &C::States) {
+        uninit.on_exit(self);
+        self.change_state(entry_point.clone());
     }
 
     // This is how messages get handled.  Structured so it can be called recursively for Parent message handling
-    pub fn dispatch(&mut self, message: C::MessageSet, state: &C::States, self_id: &u16)
+    pub fn dispatch(&mut self, message: C::MessageSet, state: &C::States)
     where
         C::States: State<C>,
     {
-        let (transition, message_option) =
-            state.handle_message(message, &mut self.extended_state, self_id);
-        match (transition, message_option) {
-            (Some(Transition::Parent), Some(message)) => {
+        let transition = state.handle_message(self, message);
+        match transition {
+            Some(Transition::Parent(message)) => {
                 trace!("Transitioning to parent state");
-                self.dispatch(message, &state.parent(), self_id);
+                self.dispatch(message, &state.parent());
             }
-            (Some(Transition::Parent), None) => {
-                panic!("Transition to parent state without a message");
-            }
-            (Some(Transition::To(new_state)), _) => {
+            Some(Transition::To(new_state)) => {
                 trace!("Transitioning to state: {:?}", new_state);
-                self.change_state(new_state, self_id);
+                self.change_state(new_state);
             }
             _ => {
                 // Do nothing if transition is None regardless of message
@@ -96,7 +94,7 @@ where
 
     // This is how states get changed
     // Traverses the on_exit and on_entry functions
-    fn change_state(&mut self, new_state: C::States, self_id: &u16) {
+    fn change_state(&mut self, new_state: C::States) {
         // Build current state path
         let current_path = self.build_state_path(self.current_state.clone());
         trace!("Current state path: {:?}", current_path);
@@ -111,12 +109,12 @@ where
 
         // Exit from current state up to (but not including) LCA
         for state in current_path[lca_index..].iter().rev() {
-            state.on_exit(&mut self.extended_state, self_id);
+            state.on_exit(self);
         }
 
         // Enter from LCA down to destination
         for state in dest_path[lca_index..].iter() {
-            state.on_entry(&mut self.extended_state, self_id);
+            state.on_entry(self);
         }
 
         // Set new current state
@@ -126,11 +124,11 @@ where
 
 pub trait State<C: Components>: fmt::Debug + 'static {
     // Default on_entry and on_exit functions do nothing, only need to be overridden if needed
-    fn on_entry(&self, _data: &mut C::ExtendedState, _self_id: &u16) {
+    fn on_entry(&self, _state_machine: &mut StateMachine<C>) {
         trace!("State on_entry: {:?}", self);
     }
 
-    fn on_exit(&self, _data: &mut C::ExtendedState, _self_id: &u16) {
+    fn on_exit(&self, _state_machine: &mut StateMachine<C>) {
         trace!("State on_exit: {:?}", self);
     }
 
@@ -141,8 +139,7 @@ pub trait State<C: Components>: fmt::Debug + 'static {
 
     fn handle_message(
         &self,
+        state_machine: &mut StateMachine<C>,
         message: C::MessageSet,
-        data: &mut C::ExtendedState,
-        self_id: &u16,
-    ) -> (Option<Transition<C::States>>, Option<C::MessageSet>);
+    ) -> Option<Transition<C::States, C::MessageSet>>;
 }

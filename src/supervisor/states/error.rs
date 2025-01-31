@@ -14,14 +14,10 @@ impl State<SupervisorComponents> for Error {
 
     fn handle_message(
         &self,
+        _state_machine: &mut StateMachine<SupervisorComponents>,
         message: SupervisorMessageSet,
-        _data: &mut SupervisorExtendedState,
-        _self_id: &u16,
-    ) -> (
-        Option<Transition<SupervisorStateEnum>>,
-        Option<SupervisorMessageSet>,
-    ) {
+    ) -> Option<Transition<SupervisorStateEnum, SupervisorMessageSet>> {
         trace!("[Error] handle_message: {:?}", message);
-        (None, None)
+        None
     }
 }

@@ -1,6 +1,6 @@
 // Copyright 2025 Bloxide, all rights reserved
 
-use crate::blox::counter::{components::*, ext_state::*, messaging::*, states::*};
+use crate::blox::counter::{components::*, messaging::*, states::*};
 use bloxide::core::state_machine::*;
 use log::*;
 
@@ -14,39 +14,32 @@ impl State<CounterComponents> for Finished {
 
     fn handle_message(
         &self,
+        state_machine: &mut StateMachine<CounterComponents>,
         message: CounterMessageSet,
-        data: &mut CounterExtendedState,
-        _self_id: &u16,
-    ) -> (
-        Option<Transition<CounterStateEnum>>,
-        Option<CounterMessageSet>,
-    ) {
+    ) -> Option<Transition<CounterStateEnum, CounterMessageSet>> {
         trace!("[Finished] handle_message: {:?}", message);
         match message {
             CounterMessageSet::CounterMessage(msg) => match &msg.payload {
                 CounterPayload::CountEvent(event) => match **event {
                     CountEvent::Reset => {
-                        data.count = 0;
-                        (
-                            Some(Transition::To(CounterStateEnum::NotStarted(NotStarted))),
-                            None,
-                        )
+                        state_machine.extended_state.count = 0;
+                        Some(Transition::To(CounterStateEnum::NotStarted(NotStarted)))
                     }
-                    _ => (None, None),
+                    _ => None,
                 },
-                _ => (None, None),
+                _ => None,
             },
-            _ => (None, None),
+            _ => None,
         }
     }
 
-    fn on_entry(&self, data: &mut CounterExtendedState, _self_id: &u16) {
+    fn on_entry(&self, data: &mut StateMachine<CounterComponents>) {
         trace!("State on_entry: {:?}", self);
         info!("Finished!");
-        info!("Count is {}", data.count);
+        info!("Count is {}", data.extended_state.count);
     }
 
-    fn on_exit(&self, _data: &mut CounterExtendedState, _self_id: &u16) {
+    fn on_exit(&self, _data: &mut StateMachine<CounterComponents>) {
         trace!("State on_exit: {:?}", self);
     }
 }
