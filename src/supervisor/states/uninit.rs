@@ -49,6 +49,6 @@ impl Uninit {
 #[cfg(feature = "runtime-embassy")]
 impl Uninit {
     fn spawn_root(&self, _future: Pin<Box<dyn Future<Output = ()> + Send>>) {
-        todo!()
+        panic!("runtime-embassy spawn_root not implemented");
     }
 }

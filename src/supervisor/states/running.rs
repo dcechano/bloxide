@@ -63,6 +63,6 @@ impl Running {
 #[cfg(feature = "runtime-embassy")]
 impl Running {
     fn spawn_blox(&self, _future: Pin<Box<dyn Future<Output = ()> + Send>>) {
-        todo!()
+        panic!("runtime-embassy spawn_blox not implemented");
     }
 }
