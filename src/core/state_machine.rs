@@ -21,10 +21,13 @@ pub enum Transition<T, M> {
     Parent(M),
 }
 
+/// The state machine that coordinates the state transitions of a blox.
 pub struct StateMachine<C: Components> {
+    /// The state the blox is currently in.
     pub current_state: C::States,
-    // ExtendedState stored here to be passed to each state
+    // ExtendedState stored here to be passed to each state.
     pub extended_state: C::ExtendedState,
+    /// The handles of the blox.
     pub self_handles: C::Handles,
 }
 
@@ -122,21 +125,30 @@ where
     }
 }
 
+/// A trait for the states of a blox.
+/// All states must have a parent state.
+/// All states must implement the `handle_message` and `parent` methods.
 pub trait State<C: Components>: fmt::Debug + 'static {
-    // Default on_entry and on_exit functions do nothing, only need to be overridden if needed
+    /// Called when the state is entered. Will need to be
+    /// called manually on the StateEnum's inner types.
     fn on_entry(&self, _state_machine: &mut StateMachine<C>) {
         trace!("State on_entry: {:?}", self);
     }
 
+    /// Called when the state is entered. Will need to be
+    /// called manually on the StateEnum's inner types.
     fn on_exit(&self, _state_machine: &mut StateMachine<C>) {
         trace!("State on_exit: {:?}", self);
     }
 
-    // All states must have a parent state
+    /// All states must have a parent state
+    /// Used when changing states.
     fn parent(&self) -> C::States {
         panic!("No parent for this state");
     }
 
+    /// Handles messages for the state.
+    /// Will need to be called manually on the StateEnum's inner types to be useful.
     fn handle_message(
         &self,
         state_machine: &mut StateMachine<C>,

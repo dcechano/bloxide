@@ -28,6 +28,7 @@ pub struct RawPayload {
 }
 
 /// Marker trait for message sets
+/// Blox's message enum should implement this trait to specify the messages they can send and receive.
 pub trait MessageSet {}
 
 /// Handle type that corresponds to a specific message type
