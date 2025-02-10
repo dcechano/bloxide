@@ -36,9 +36,6 @@ jobs:
     name: Lint (Check with both default and embassy features)
     runs-on: ubuntu-latest
 
-    strategy:
-      matrix:
-        feature-set: [ "default", "embassy" ]
     steps:
       - uses: actions/checkout@v4
 
@@ -50,13 +47,8 @@ jobs:
       # Decide which Cargo flags to use based on matrix.feature-set
       - name: Cargo Build
         run: |
-          if [ "${{ matrix.feature-set }}" = "default" ]; then
-            echo "Building with default features..."
-            cargo build
-          else
-            echo "Building with no default features + embassy..."
-            cargo build --no-default-features --features runtime-embassy
-          fi
+          echo "Building with default features..."
+          cargo build
 
       - name: Cargo Format
         run: |
@@ -64,11 +56,7 @@ jobs:
 
       - name: Cargo Clippy
         run: |
-          if [ "${{ matrix.feature-set }}" = "default" ]; then
-            cargo clippy --all-targets -- -W warnings -D warnings
-          else
-            cargo clippy --all-targets --no-default-features --features runtime-embassy -- -W warnings -D warnings
-          fi
+          cargo clippy --all-targets -- -W warnings -D warnings
 
   test:
     name: Test (Run coverage with both default and embassy features)
@@ -76,7 +64,7 @@ jobs:
 
     strategy:
       matrix:
-        feature-set: [ "default", "embassy" ]
+        feature-set: [ "default" ]
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -92,15 +80,9 @@ jobs:
 
       - name: Run tests and report code coverage
         run: |
-          if [ "${{ matrix.feature-set }}" = "default" ]; then
-            echo "Testing with default features..."
-            # If all tests pass in default mode:
-            RUSTC_BOOTSTRAP=1 cargo tarpaulin -o xml -o lcov -o html --doc --tests
-          else
-            echo "Testing with no default features + embassy..."
-            # For no_std or embedded, tarpaulin might be limited.
-            # RUSTC_BOOTSTRAP=1 cargo tarpaulin --no-default-features --features runtime-embassy -o xml -o lcov -o html --doc --tests
-          fi
+          echo "Testing with default features..."
+          # If all tests pass in default mode:
+          RUSTC_BOOTSTRAP=1 cargo tarpaulin -o xml -o lcov -o html --doc --tests
 
       - name: Upload coverage report (xml)
         uses: actions/upload-artifact@v4
@@ -128,4 +110,4 @@ jobs:
       - uses: actions/checkout@v4
       - name: Create Documentation for bloxide
         working-directory: ${{github.workspace}}
-        run: RUSTDOCFLAGS=-Dwarnings cargo doc -p bloxide --no-deps
+        run: RUSTDOCFLAGS=-Dwarnings cargo doc --workspace --no-deps
